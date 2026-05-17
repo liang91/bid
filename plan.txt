@@ -12,9 +12,8 @@
 
 公告信息有3中状态：1：获取概要信息（拿到了列表item）20：获取了网页内容 30：解析出了公告内容。我打算分进程执行以上3步（方便调度，以及排查错误）。请落实我定下的第1个关键点的技术方案。
 
-在fetch_html里，获取到网页html后，请去掉head/foot/css/js代码，把剩下的html赋值给表里的html字段。
-网页html只使用html这个变量，我已经把数据库里的html_content改名为了html，请修改数据模型、代码，把对应变量名都改成html。
-
+我使用了字节旗下火山引擎的豆包大模型，请参考网页：https://www.volcengine.com/docs/82379/1399008?lang=zh，
+使用字节的SDK来调用文本生成API，不再用openai的SDK。
 
 
 

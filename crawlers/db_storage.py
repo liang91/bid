@@ -102,7 +102,7 @@ class MySQLStorage:
             "project_contact_person", "project_contact_phone",
             "qualification_summary", "industry_tags", "keywords",
             "suggested_company_types", "geographic_advantage",
-            "raw_abstract", "html", "parse_time",
+            "abstract", "html", "parse_time",
             "status", "created_at", "updated_at",
         ]
         columns = ", ".join([self._quote_field(f) for f in fields])
@@ -305,7 +305,6 @@ class MySQLStorage:
             return False
 
         update_fields = [
-            "platform", "part", "title",
             "region_province", "region_city", "region_district",
             "project_name", "project_no", "purchase_plan_no",
             "budget", "max_limit", "currency",
@@ -321,7 +320,7 @@ class MySQLStorage:
             "project_contact_person", "project_contact_phone",
             "qualification_summary", "industry_tags", "keywords",
             "suggested_company_types", "geographic_advantage",
-            "raw_abstract", "parse_time",
+            "abstract", "parse_time",
             "status", "updated_at",
         ]
 
@@ -335,6 +334,136 @@ class MySQLStorage:
         with self._get_cursor() as cursor:
             cursor.execute(sql, params)
             return cursor.rowcount > 0
+
+    # -------------------------------------------------------------------------
+    # 子表插入方法（parse_detail 阶段调用）
+    # -------------------------------------------------------------------------
+
+    def insert_notice_attachments(self, notice_id: int, attachments: list) -> int:
+        """插入公告附件，先删除旧记录再批量插入.
+
+        Args:
+            notice_id: 关联公告ID
+            attachments: LLM 解析出的附件列表，元素格式 {"name": ..., "url": ...}
+
+        Returns:
+            插入条数
+        """
+        if not attachments:
+            return 0
+
+        sql_delete = "DELETE FROM notice_attachments WHERE notice_id = %s"
+
+        fields = ["notice_id", "name", "download_url"]
+        columns = ", ".join([self._quote_field(f) for f in fields])
+        placeholders = ", ".join([f"%({f})s" for f in fields])
+        sql_insert = f"INSERT INTO notice_attachments ({columns}) VALUES ({placeholders})"
+
+        params = []
+        for item in attachments:
+            if not isinstance(item, dict):
+                continue
+            params.append({
+                "notice_id": notice_id,
+                "name": str(item.get("name") or "")[:256],
+                "download_url": str(item.get("url") or "")[:512],
+            })
+
+        if not params:
+            return 0
+
+        with self._get_cursor() as cursor:
+            cursor.execute(sql_delete, (notice_id,))
+            cursor.executemany(sql_insert, params)
+            return cursor.rowcount
+
+    def insert_notice_packages(self, notice_id: int, packages: list) -> int:
+        """插入公告分包，先删除旧记录再批量插入.
+
+        Args:
+            notice_id: 关联公告ID
+            packages: LLM 解析出的分包列表，元素格式 {"no": ..., "name": ..., "budge": ..., ...}
+
+        Returns:
+            插入条数
+        """
+        if not packages:
+            return 0
+
+        sql_delete = "DELETE FROM notice_packages WHERE notice_id = %s"
+
+        fields = ["notice_id", "no", "name", "budget", "max_limit", "quantity", "unit"]
+        columns = ", ".join([self._quote_field(f) for f in fields])
+        placeholders = ", ".join([f"%({f})s" for f in fields])
+        sql_insert = f"INSERT INTO notice_packages ({columns}) VALUES ({placeholders})"
+
+        params = []
+        for item in packages:
+            if not isinstance(item, dict):
+                continue
+            params.append({
+                "notice_id": notice_id,
+                "no": str(item.get("no") or "")[:16],
+                "name": str(item.get("name") or "")[:256],
+                "budget": _to_decimal(parse_amount(item.get("budge") or item.get("budget") or "")),
+                "max_limit": _to_decimal(parse_amount(item.get("max_limit") or "")),
+                "quantity": _to_decimal(item.get("quantity") or 0),
+                "unit": str(item.get("unit") or "")[:32],
+            })
+
+        if not params:
+            return 0
+
+        with self._get_cursor() as cursor:
+            cursor.execute(sql_delete, (notice_id,))
+            cursor.executemany(sql_insert, params)
+            return cursor.rowcount
+
+    def insert_notice_qualifications(self, notice_id: int, qualifications: list) -> int:
+        """插入公告资质要求，先删除旧记录再批量插入.
+
+        Args:
+            notice_id: 关联公告ID
+            qualifications: LLM 解析出的资质列表
+
+        Returns:
+            插入条数
+        """
+        if not qualifications:
+            return 0
+
+        sql_delete = "DELETE FROM notice_qualifications WHERE notice_id = %s"
+
+        fields = [
+            "notice_id", "qualification_type", "name", "required_scope",
+            "valid_required", "evidence_type", "joint_bid_acceptable", "sort_order",
+        ]
+        columns = ", ".join([self._quote_field(f) for f in fields])
+        placeholders = ", ".join([f"%({f})s" for f in fields])
+        sql_insert = f"INSERT INTO notice_qualifications ({columns}) VALUES ({placeholders})"
+
+        params = []
+        for idx, item in enumerate(qualifications):
+            if not isinstance(item, dict):
+                continue
+            params.append({
+                "notice_id": notice_id,
+                "qualification_type": str(item.get("qualification_type") or "")[:32],
+                "name": str(item.get("name") or "")[:128],
+                "required_scope": str(item.get("required_scope") or "")[:256],
+                "valid_required": _to_tinyint(item.get("valid_required")),
+                "evidence_type": str(item.get("evidence_type") or "")[:64],
+                "joint_bid_acceptable": _to_tinyint(item.get("joint_bid_acceptable")),
+                "sort_order": idx,
+            })
+
+        if not params:
+            return 0
+
+        with self._get_cursor() as cursor:
+            cursor.execute(sql_delete, (notice_id,))
+            cursor.executemany(sql_insert, params)
+            return cursor.rowcount
 
     @staticmethod
     def _row_to_notice(row: dict) -> ProcurementNotice:
@@ -447,7 +576,7 @@ class MySQLStorage:
             "suggested_company_types": _to_json(d.get("suggested_company_types")),
             "geographic_advantage": d.get("geographic_advantage") or "",
 
-            "raw_abstract": d.get("raw_abstract") or "",
+            "abstract": d.get("abstract") or "",
             "html": d.get("html") or "",
             "parse_time": datetime.now(),
 
@@ -477,6 +606,18 @@ def _to_decimal(val) -> Decimal:
         return Decimal(str(val)).quantize(Decimal("0.00"))
     except InvalidOperation:
         return Decimal("0.00")
+
+
+def _to_tinyint(val) -> int:
+    """将解析结果转为 0/1 的 TINYINT，支持布尔/字符串/数字."""
+    if val is None:
+        return 0
+    if isinstance(val, bool):
+        return 1 if val else 0
+    if isinstance(val, (int, float)):
+        return 1 if val else 0
+    s = str(val).strip().lower()
+    return 1 if s in ("1", "true", "是", "yes", "y") else 0
 
 
 # DATETIME NOT NULL 字段的默认值（与数据库默认值保持一致）

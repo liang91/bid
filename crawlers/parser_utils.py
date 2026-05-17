@@ -1,6 +1,10 @@
 """公告信息解析工具.
 
 提供从招标公告文本和元数据中提取标准化字段的辅助函数.
+
+注意：
+- 本模块只包含【通用】文本/时间/金额解析逻辑，不依赖任何平台的 HTML 结构。
+- 平台相关的 HTML 提取/清理逻辑（如针对特定 DOM 选择器）应放在各平台爬虫类中。
 """
 
 import re
@@ -343,82 +347,10 @@ def parse_purchaser_contact_person(content_text: Optional[str]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# HTML 清理（用于 LLM 解析前过滤无用内容）
-# ---------------------------------------------------------------------------
-
-_NOISE_TAGS = {"script", "style", "nav", "footer", "header", "iframe", "noscript", "aside", "svg", "canvas"}
-_NOISE_CLASSES = re.compile(
-    r"header|footer|nav|menu|sidebar|breadcrumb|banner|advert|ad-|toolbar|modal|popup|dialog",
-    re.IGNORECASE,
-)
-
-
-def clean_html_for_llm(html: str, max_length: int = 15000) -> str:
-    """清理 HTML，过滤 header/foot/js/css 等噪声，提取正文内容.
-
-    针对中国政府采购网详情页做了优化：
-    - 优先提取 vF_detail_content（正文）、vF_detail_header（标题）、table（概要表格）
-    - 去掉 script/style/nav/footer/header 等标签及其内容
-    - 合并多余空白，控制总长度
-
-    Args:
-        html: 原始 HTML 字符串
-        max_length: 返回文本的最大长度
-
-    Returns:
-        清理后的纯文本
-    """
-    if not html:
-        return ""
-
-    soup = BeautifulSoup(html, "lxml")
-
-    # 1. 去掉已知噪声标签
-    for tag in soup.find_all(_NOISE_TAGS):
-        tag.decompose()
-
-    # 2. 去掉带有噪声 class/id 的标签
-    for tag in soup.find_all(True):
-        classes = " ".join(tag.get("class", []))
-        tag_id = tag.get("id", "")
-        if _NOISE_CLASSES.search(classes) or _NOISE_CLASSES.search(tag_id):
-            tag.decompose()
-
-    # 3. 针对政府采购网提取主要内容区域
-    main_blocks = []
-    selectors = [
-        ("div", {"class": "vF_detail_header"}),
-        ("div", {"class": "table"}),
-        ("div", {"class": "vF_detail_content"}),
-    ]
-    for tag_name, attrs in selectors:
-        block = soup.find(tag_name, attrs=attrs)
-        if block:
-            main_blocks.append(block.get_text(separator="\n", strip=True))
-
-    if main_blocks:
-        text = "\n\n".join(main_blocks)
-    else:
-        #  fallback：提取 body 全部文本
-        body = soup.find("body")
-        text = body.get_text(separator="\n", strip=True) if body else soup.get_text(separator="\n", strip=True)
-
-    # 4. 合并多余空白
-    text = re.sub(r"\n\s*\n+", "\n\n", text)
-    text = re.sub(r"[ \t]+", " ", text)
-    lines = [line.strip() for line in text.split("\n") if line.strip()]
-    text = "\n".join(lines)
-
-    # 5. 截断
-    if len(text) > max_length:
-        text = text[:max_length] + "\n...[内容已截断]"
-
-    return text
-
-
-# ---------------------------------------------------------------------------
 # HTML 噪声过滤（保留 HTML 结构，去掉 head/foot/css/js）
 # ---------------------------------------------------------------------------
+# 说明：此函数较为通用，仅移除标准噪声标签（script/style/nav 等），
+# 不依赖特定平台的 DOM 结构。如需平台定制，请在平台爬虫类中重写。
 
 _NOISE_HTML_TAGS = {"head", "script", "style", "nav", "footer", "header", "iframe", "noscript", "aside", "svg", "canvas", "link", "meta"}
 
@@ -448,10 +380,3 @@ def strip_html_noise(html: str) -> str:
     if body:
         return str(body)
     return str(soup)
-    text = "\n".join(lines)
-
-    # 5. 截断
-    if len(text) > max_length:
-        text = text[:max_length] + "\n...[内容已截断]"
-
-    return text

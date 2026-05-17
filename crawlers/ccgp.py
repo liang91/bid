@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup
 from .db_storage import MySQLStorage
 from .llm_parser import LLMParser
 from .models import ProcurementNotice
-from .parser_utils import clean_html_for_llm, strip_html_noise
+from .parser_utils import strip_html_noise
 
 DEFAULT_HEADERS = {
     "User-Agent": (
@@ -47,6 +47,91 @@ class CCGPCrawler:
         "dfgg": "地方公告",
         "zygg": "中央公告",
     }
+
+    # -------------------------------------------------------------------------
+    # 平台相关：LLM 解析配置
+    # -------------------------------------------------------------------------
+    SYSTEM_PROMPT = "你是一个专业的政府采购网招标公告信息提取助手。"
+    TASK_PROMPT = """你的任务是从给定的政府采购公告页HTML中，提取关键的招标信息。
+需要提取的字段如下（字段名必须严格与下面列出的英文名称一致；如果文本中确实没有该信息，请返回 null，不要编造）：
+    
+- project_name: 采购项目名称
+- project_no: 项目编号（如"JXHCGC2026-GZ-J006"）
+- purchase_plan_no: 采购计划编号
+- category_name: 采购品目名称（如"货物/通用设备/计算机设备及软件/计算机网络设备"）
+- method: 采购方式（如"公开招标"、"竞争性谈判"、"询价"、"单一来源"）
+- budget: 预算金额（如"￥100.000000万元（人民币）"）
+- max_limit: 最高限价
+- currency: 币种，默认为"CNY"
+
+- region_province: 采购方所在省份（如"江西省"、"北京市"）
+- region_city: 采购方所在城市（如"赣州市"、"成都市"），
+- region_district: 采购方所在区/县（如"青羊区"、"铜官区"），如果是县级市则填县级市名称
+
+- notice_date: 公告发布时间，严格格式化为 YYYY-MM-DD HH:MM（如"2026-05-15 16:55"），如果只到日期则输出 YYYY-MM-DD
+- doc_obtain_start: 采购文件获取开始时间，格式 YYYY-MM-DD HH:MM。如果公告中给出的是时间范围文本（如"2026年05月17日至2026年05月24日"），可将整段文本填入此字段
+- doc_obtain_end: 采购文件获取截止时间，格式 YYYY-MM-DD HH:MM
+- bid_deadline: 投标截止时间/响应文件提交截止时间，格式 YYYY-MM-DD HH:MM
+- bid_open_time: 开标时间，格式 YYYY-MM-DD HH:MM
+
+- bid_platform: 投标平台/开标地点/获取招标文件的地点
+- doc_price: 招标文件/采购文件售价（如"￥0元"、"￥500元"）
+
+- purchaser_name: 采购人名称
+- purchaser_address: 采购人地址
+- purchaser_contact_person: 采购人联系人姓名
+- purchaser_contact_phone: 采购人联系电话
+- purchaser_region: 采购人所在行政区域（如"北京市"、"杭州市西湖区"）
+
+- agency_name: 代理机构名称
+- agency_address: 代理机构地址
+- agency_contact_person: 代理机构联系人姓名
+- agency_contact_phone: 代理机构联系电话
+
+- project_contact_person: 项目联系人姓名
+- project_contact_phone: 项目联系电话
+
+- abstract: 正文内容摘要（300字以内，概括项目主要内容、要求、关键词，这个字段用于建全文索引）
+- qualification_summary: 资质要求摘要
+
+- notice_attachments: [ 
+    {
+        name: 附件名,
+        url: 附件链接
+    } 附件详情
+] 公告附件列表
+
+- notice_packages: [
+    {
+        no: 采购包编号
+        name: 采购包名称,
+        budge: 包预算,
+        max_limit: 采购限额,
+        quantity: 采购数量,
+        unit: 货品单位
+    }
+] 采购包列表
+
+- notice_qualifications: [
+    {
+        qualification_type: 资质类型,
+        name: 资质/证书名称,
+        required_scope: 要求范围/等级,
+        valid_required: 是否要求有效期内,
+        evidence_type: 证明材料类型,
+        joint_bid_acceptable: 联合体是否可接受
+    }
+] 资质要求列表
+
+返回格式要求：
+1. 只返回纯 JSON 对象，不要包含 markdown 代码块标记（如 ```json）
+2. 不要添加任何解释性文字
+3. 所有字段名必须严格使用上面列出的英文名称
+4. 字符串值保持原文，不要翻译或改写
+
+你要解析的公告页HTML内容如下：
+
+"""
 
     def __init__(
             self,
@@ -147,53 +232,85 @@ class CCGPCrawler:
 
         return notices
 
-    def _parse_detail_page(self, html: str, notice: ProcurementNotice, use_llm: bool = False) -> ProcurementNotice:
-        """解析详情页，填充详细信息.
+    # -------------------------------------------------------------------------
+    # 平台相关：HTML 清理（针对中国政府采购网详情页结构）
+    # -------------------------------------------------------------------------
 
-        Args:
-            html: 详情页 HTML
-            notice: 待填充的公告对象
-            use_llm: 是否使用 LLM 解析（需要初始化时传入 llm_parser）
+    @staticmethod
+    def _clean_html_for_llm(html: str, max_length: int = 15000) -> str:
+        """清理 HTML，提取正文并保留标签结构供 LLM 解析.
+
+        注意：入参 html 是 fetch_html 阶段经过 strip_html_noise 过滤后的 body 内容
+       （已去除 head/script/style/nav/footer 等标签），本方法在此基础上：
+        - 移除 class/id 包含噪声关键词的 div（如顶部导航栏 v4incheadertop、
+          面包屑 vF_deail_currentloc、底部版权 footer、相关公告 vF_detail_relcontent）
+        - 优先提取 vF_detail_header（标题）、.table（概要表格）、vF_detail_content（正文）
+        - 去掉所有标签的属性（class、id、style 等），但保留 HTML 标签本身，
+          使 LLM 能借助表格、段落等结构更好地解析信息
+        - 控制总长度
         """
-        if use_llm and self.llm_parser is not None:
-            notice = self.llm_parser.parse(html, notice)
-            # LLM 解析后，仍保留原始 HTML 正文（如果 raw_abstract 仍为空）
-            soup = BeautifulSoup(html, "lxml")
-            content_div = soup.find("div", class_="vF_detail_content")
-            if content_div:
-                notice.html = str(content_div)
-                if not notice.raw_abstract:
-                    text = content_div.get_text(separator="\n", strip=True)
-                    notice.raw_abstract = text
+        if not html:
+            return ""
+
+        soup = BeautifulSoup(html, "lxml")
+
+        _NOISE_CLASSES = re.compile(
+            r"header|footer|nav|menu|sidebar|breadcrumb|banner|advert|ad-|toolbar|modal|popup|dialog",
+            re.IGNORECASE,
+        )
+
+        # 1. 去掉带有噪声 class/id 的标签
+        # 注意：先收集再统一 decompose，避免在迭代 find_all(True) 时修改树结构
+        # 导致 lxml 产生 name=''、attrs=None 的幽灵节点
+        tags_to_remove = []
+        for tag in soup.find_all(True):
+            # 防御：跳过 lxml 可能产生的空节点
+            if not tag.name or tag.attrs is None:
+                continue
+            classes = " ".join(tag.get("class", []))
+            tag_id = tag.get("id", "")
+            if _NOISE_CLASSES.search(classes) or _NOISE_CLASSES.search(tag_id):
+                # 保护本平台主要内容区域，避免误删
+                if any(k in classes for k in ("vF_detail_header", "vF_detail_content", "vF_deail_maincontent")):
+                    continue
+                tags_to_remove.append(tag)
+        for tag in tags_to_remove:
+            tag.decompose()
+
+        # 2. 提取主要内容区域，去掉所有标签的属性但保留标签
+        main_blocks = []
+        selectors = [
+            ("div", {"class": "vF_detail_header"}),
+            ("div", {"class": "table"}),
+            ("div", {"class": "vF_detail_content"}),
+        ]
+        for tag_name, attrs in selectors:
+            block = soup.find(tag_name, attrs=attrs)
+            if block:
+                block.attrs = {}
+                for inner in block.find_all(True):
+                    inner.attrs = {}
+                main_blocks.append(str(block))
+
+        if main_blocks:
+            result = "\n".join(main_blocks)
         else:
-            soup = BeautifulSoup(html, "lxml")
+            # fallback：简化整个 body，去掉所有属性保留标签
+            body = soup.find("body")
+            root = body if body else soup
+            for tag in root.find_all(True):
+                tag.attrs = {}
+            result = str(root)
 
-            # 1. 标题（如果列表页标题被截断，用详情页的完整标题覆盖）
-            header = soup.find("div", class_="vF_detail_header")
-            if header:
-                h2 = header.find("h2", class_="tc")
-                if h2:
-                    notice.project_name = h2.get_text(strip=True)
+        # 3. 截断
+        if len(result) > max_length:
+            result = result[:max_length] + "\n<!-- 内容已截断 -->"
 
-            # 2. 概要表格
-            table_div = soup.find("div", class_="table")
-            if table_div:
-                table = table_div.find("table")
-                if table:
-                    self._parse_summary_table(table, notice)
+        return result
 
-            # 3. 正文内容
-            content_div = soup.find("div", class_="vF_detail_content")
-            if content_div:
-                notice.html = str(content_div)
-                # 提取纯文本，去掉多余空白
-                text = content_div.get_text(separator="\n", strip=True)
-                notice.raw_abstract = text
-
-        # 4. 解析/标准化额外字段（省市区、时间、项目编号）
-        self._enrich_notice(notice)
-
-        return notice
+    # -------------------------------------------------------------------------
+    # 平台相关：LLM 结果填充与后处理
+    # -------------------------------------------------------------------------
 
     @staticmethod
     def _enrich_notice(notice: ProcurementNotice) -> None:
@@ -209,7 +326,7 @@ class CCGPCrawler:
         # 省市区
         notice.region_province, notice.region_city, notice.region_district = extract_region(
             address=notice.purchaser_address,
-            region=notice.region,
+            region=notice.region_province,
             administrative_region=notice.purchaser_region,
         )
 
@@ -218,158 +335,25 @@ class CCGPCrawler:
             notice.notice_date = standardize_publish_time(notice.notice_date)
 
         # 项目编号
-        notice.project_no = extract_project_code(notice.raw_abstract, notice.project_name)
+        notice.project_no = extract_project_code(notice.abstract, notice.project_name)
 
         # 采购方联系人（从正文尽力提取，如果表格中未提供）
         if not notice.purchaser_contact_person:
-            notice.purchaser_contact_person = parse_purchaser_contact_person(notice.raw_abstract)
+            notice.purchaser_contact_person = parse_purchaser_contact_person(notice.abstract)
 
-        # 采购文件获取时间拆分（doc_obtain_start 先存了原始范围文本）
-        if notice.doc_obtain_start:
+        # 采购文件获取时间拆分：只有当 doc_obtain_start 是时间范围文本时才拆分
+        if notice.doc_obtain_start and (
+            "至" in notice.doc_obtain_start or "到" in notice.doc_obtain_start
+        ):
             notice.doc_obtain_start, notice.doc_obtain_end = parse_time_range(notice.doc_obtain_start)
 
         # 投标截止时间 / 开标时间标准化
         if notice.bid_open_time:
             _std = standardize_publish_time(notice.bid_open_time)
-            notice.bid_deadline = _std
             notice.bid_open_time = _std
-
-    def _parse_summary_table(self, table, notice: ProcurementNotice) -> None:
-        """解析详情页概要表格.
-
-        表格特征：
-        - label 单元格通常有 class='title'
-        - 一行可能是 2 列（label + value）或 4 列（label+value label+value）
-        - 也存在 label 和 value 连续出现但没有 class 的情况
-        """
-        rows = table.find_all("tr")
-        for row in rows:
-            tds = row.find_all(["td", "th"])
-            if not tds:
-                continue
-
-            i = 0
-            while i < len(tds):
-                td = tds[i]
-                classes = td.get("class") or []
-                text = td.get_text(strip=True)
-
-                # 跳过纯空或纯分隔符单元格
-                if not text or text == "公告信息：" or text == "联系人及联系方式：":
-                    i += 1
-                    continue
-
-                # 如果当前 td 是 title 类，则它一定是 label
-                if "title" in classes:
-                    label = text
-                    value = ""
-                    # 找下一个非 title 的 td 作为值
-                    if i + 1 < len(tds):
-                        next_td = tds[i + 1]
-                        next_classes = next_td.get("class") or []
-                        if "title" not in next_classes:
-                            value = next_td.get_text(strip=True)
-                            i += 1  # 跳过值列
-                    self._map_field(label, value, notice)
-                else:
-                    # 非 title 单元格，尝试把它当 label（兼容无 class 的表格）
-                    # 但只做简单的关键词匹配，避免误解析
-                    if i + 1 < len(tds):
-                        next_td = tds[i + 1]
-                        next_text = next_td.get_text(strip=True)
-                        # 如果当前文本像 label（包含常见关键词且较短）
-                        if self._looks_like_label(text) and len(text) < 20:
-                            self._map_field(text, next_text, notice)
-                            i += 1  # 跳过值列
-                i += 1
-
-    def _looks_like_label(self, text: str) -> bool:
-        """判断文本是否像表格 label."""
-        keywords = [
-            "项目", "名称", "品目", "单位", "区域", "时间", "地点", "地址",
-            "售价", "金额", "联系人", "电话", "方式", "代理", "评审", "专家",
-            "公告", "预算", "开标", "中标", "招标", "采购", "响应", "文件",
-        ]
-        return any(kw in text for kw in keywords)
-
-    def _map_field(self, label: str, value: str, notice: ProcurementNotice) -> None:
-        """将表格标签映射到 ProcurementNotice 模型字段.
-
-        字段名已与 procurement_notices SQL 表一一对应。
-        支持同义词映射，以兼容不同公告类型。
-        """
-        mapping = {
-            # 项目名称
-            "采购项目名称": "project_name",
-            "项目名称": "project_name",
-            # 品目
-            "品目": "category_name",
-            # 采购单位
-            "采购单位": "purchaser_name",
-            # 行政区域
-            "行政区域": "purchaser_region",
-            # 获取文件时间（招标/采购/磋商 等）→ 暂存到 doc_obtain_start，后续 _enrich_notice 拆分
-            "获取招标文件时间": "doc_obtain_start",
-            "获取采购文件时间": "doc_obtain_start",
-            "招标文件获取时间": "doc_obtain_start",
-            "采购文件获取时间": "doc_obtain_start",
-            # 文件售价
-            "招标文件售价": "doc_price",
-            "采购文件售价": "doc_price",
-            "文件售价": "doc_price",
-            # 获取文件地点
-            "获取招标文件的地点": "bid_platform",
-            "获取采购文件的地点": "bid_platform",
-            "获取文件的地点": "bid_platform",
-            "招标文件获取地点": "bid_platform",
-            # 开标/开启时间
-            "开标时间": "bid_open_time",
-            "响应文件开启时间": "bid_open_time",
-            "开标日期": "bid_open_time",
-            "投标截止时间": "bid_open_time",
-            "提交投标文件截止时间": "bid_open_time",
-            # 开标/开启地点
-            "开标地点": "bid_platform",
-            "响应文件开启地点": "bid_platform",
-            "投标地点": "bid_platform",
-            # 预算金额
-            "预算金额": "budget",
-            "总预算金额": "budget",
-            "采购预算": "budget",
-            # 中标金额（结果公告用，公开招标通常无此字段）
-            "总中标金额": "budget",
-            "中标金额": "budget",
-            "成交金额": "budget",
-            # 联系人
-            "项目联系人": "project_contact_person",
-            "联系人": "project_contact_person",
-            # 联系电话
-            "项目联系电话": "project_contact_phone",
-            "联系电话": "project_contact_phone",
-            # 采购单位地址
-            "采购单位地址": "purchaser_address",
-            "单位地址": "purchaser_address",
-            # 采购单位联系方式
-            "采购单位联系方式": "purchaser_contact_phone",
-            "单位联系方式": "purchaser_contact_phone",
-            # 代理机构
-            "代理机构名称": "agency_name",
-            "代理机构": "agency_name",
-            # 代理机构地址
-            "代理机构地址": "agency_address",
-            # 代理机构联系方式
-            "代理机构联系方式": "agency_contact_phone",
-            # 公告时间（可覆盖列表页的 notice_date）
-            "公告时间": "notice_date",
-        }
-
-        field_name = mapping.get(label)
-        if field_name:
-            setattr(notice, field_name, value or "")
-
-        # 附件
-        if label.startswith("附件") and value:
-            notice.attachments.append(value)
+            # 只有当 bid_deadline 为空时，才用 bid_open_time 回填
+            if not notice.bid_deadline:
+                notice.bid_deadline = _std
 
     @staticmethod
     def _is_tender_notice(notice: ProcurementNotice) -> bool:
@@ -525,15 +509,30 @@ class CCGPCrawler:
                 continue
 
             try:
-                # 先过滤掉 header/foot/js/css，再传给 LLM
-                cleaned_text = clean_html_for_llm(html)
-                notice = self.llm_parser.parse(cleaned_text, notice)
+                # 先按本平台 HTML 结构过滤无用内容，再传给 LLM
+                cleaned_text = self._clean_html_for_llm(html)
+                llm_result = self.llm_parser.parse(CCGPCrawler.SYSTEM_PROMPT, CCGPCrawler.TASK_PROMPT + cleaned_text)
+
+                # 提取子表列表数据（这些字段不在 ProcurementNotice 模型中）
+                sub_attachments = llm_result.pop("notice_attachments", None) or []
+                sub_packages = llm_result.pop("notice_packages", None) or []
+                sub_qualifications = llm_result.pop("notice_qualifications", None) or []
+
+                # LLM 返回的字段名已与 ProcurementNotice 对齐，直接遍历填充主表
+                for key, value in llm_result.items():
+                    if value is not None and value != "" and hasattr(notice, key):
+                        setattr(notice, key, value)
+
                 # LLM 解析后补充标准化字段
                 self._enrich_notice(notice)
 
                 notice.status = 30
                 ok = self.db_storage.update_parsed_detail(notice)
                 if ok:
+                    # 主表更新成功后再插入子表数据
+                    self.db_storage.insert_notice_attachments(notice.id, sub_attachments)
+                    self.db_storage.insert_notice_packages(notice.id, sub_packages)
+                    self.db_storage.insert_notice_qualifications(notice.id, sub_qualifications)
                     success += 1
                     print(f"[parse_detail-llm] {idx}/{len(notices)} 成功: {notice.project_name[:40]}...")
                 else:

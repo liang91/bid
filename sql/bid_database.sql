@@ -39,7 +39,7 @@ CREATE TABLE procurement_notices (
     -- 采购方式
     method VARCHAR(32) NOT NULL DEFAULT '' COMMENT '公开招标/竞争性谈判/询价/单一来源',
     joint_bid_allowed TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否接受联合体',
-    joint_bid_max_members INT NOT NULL DEFAULT 1 COMMENT '联合体最多成员数',
+    joint_bid_max_members INT NOT NULL DEFAULT 0 COMMENT '联合体最多成员数',
     sme_oriented TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否面向中小企业',
 
     -- 时间节点（全部改为DATETIME）
@@ -81,7 +81,7 @@ CREATE TABLE procurement_notices (
     geographic_advantage VARCHAR(32) NOT NULL DEFAULT '' COMMENT '地域优势',
 
     -- 原始摘要
-    raw_abstract TEXT COMMENT '原文摘要',
+    abstract TEXT COMMENT '原文摘要',
     html MEDIUMTEXT COMMENT '详情页原始HTML内容',
     parse_time DATETIME NOT NULL DEFAULT '1970-01-01 00:00:00' COMMENT '解析时间',
 
@@ -99,7 +99,7 @@ CREATE TABLE procurement_notices (
     INDEX idx_category (category_code),
     INDEX idx_status (status),
     FULLTEXT INDEX ft_project_name (project_name),
-    FULLTEXT INDEX ft_raw_abstract (raw_abstract)
+    FULLTEXT INDEX ft_abstract (abstract)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='招标公告主表';
 
 -- ------------------------------------------------------------
@@ -256,11 +256,3 @@ CREATE TABLE match_results (
     INDEX idx_final_score (final_score),
     INDEX idx_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='供应商-招标公告匹配结果表';
-
--- ============================================================
--- 迁移脚本：从旧版表结构升级（如已存在表，执行以下 ALTER）
--- ============================================================
--- ALTER TABLE procurement_notices
---     ADD COLUMN html MEDIUMTEXT COMMENT '详情页原始HTML内容' AFTER raw_abstract;
--- ALTER TABLE procurement_notices
---     MODIFY COLUMN status TINYINT NOT NULL DEFAULT 1 COMMENT '1:获取概要信息 20:获取了网页内容 30:解析出了公告内容';
