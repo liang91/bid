@@ -130,7 +130,7 @@ CREATE TABLE notice_attachments (
 
     -- 附件基本信息
     name VARCHAR(256) NOT NULL DEFAULT '' COMMENT '附件名称（如：招标文件、工程量清单、图纸等）',
-    download_url VARCHAR(512) NOT NULL DEFAULT '' COMMENT '原始下载链接',
+    url VARCHAR(512) NOT NULL DEFAULT '' COMMENT '原始下载链接',
     object_key VARCHAR(256) NOT NULL DEFAULT '' COMMENT '对象存储Key',
 
     -- 时间戳

@@ -19,10 +19,19 @@
 
 """
 import argparse
+import logging
 import sys
 
+from config import load_config
 from crawlers.ccgp import CCGPCrawler
-from crawlers.config_loader import load_config
+
+# 配置根日志格式与级别
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger(__name__)
 
 
 def main():
@@ -82,59 +91,49 @@ def main():
     # 加载配置文件（固定路径：项目根目录 config.yaml）
     try:
         load_config()
-        print("[配置] 已加载配置文件")
+        logger.info("[配置] 已加载配置文件")
     except FileNotFoundError as e:
-        print(f"[配置] 警告: {e}")
+        logger.warning(f"[配置] 警告: {e}")
 
     # pages=0 表示爬取全部
     pages = None if args.pages == 0 else args.pages
 
-    # 初始化 LLM 解析器（parse 步骤必须）
-    llm_parser = None
+    # parse 步骤前预检 LLM 配置
     if args.step == "parse":
         from crawlers.llm_parser import LLMParser
         try:
-            llm_parser = LLMParser()
-            print(f"[LLM] 已启用 LLM 解析，模型: {llm_parser.model}")
+            logger.info(f"[LLM] 已启用 LLM 解析，模型: {LLMParser.get_model()}")
         except ValueError as e:
-            print(f"[LLM] 初始化失败: {e}")
+            logger.error(f"[LLM] 初始化失败: {e}")
             sys.exit(1)
-
-    # 初始化数据库存储
-    from crawlers.db_storage import MySQLStorage
-    try:
-        db_storage = MySQLStorage()
-        print(
-            f"[数据库] 已连接到 "
-            f"{db_storage.conn_params['host']}:{db_storage.conn_params['port']}/"
-            f"{db_storage.conn_params['database']}"
-        )
-    except Exception as e:
-        print(f"[数据库] 连接失败: {e}")
-        sys.exit(1)
 
     crawler = CCGPCrawler(
         part=args.part,
         delay=args.delay,
-        llm_parser=llm_parser,
-        db_storage=db_storage,
     )
 
     # 根据步骤执行
     if args.step == "list":
-        print(f"\n>>> 执行第1步: fetch_list (爬取列表页，保存概要信息)\n")
+        logger.info(">>> 执行第1步: fetch_list (爬取列表页，保存概要信息)")
         result = crawler.fetch_list(pages=pages)
-        print(f"\n[结果] 爬取 {result['crawled']} 条, 过滤后 {result['filtered']} 条, 入库 {result['inserted']} 条")
+        logger.info(
+            f"[结果] 爬取 {result['crawled']} 条, 过滤后 {result['filtered']} 条, "
+            f"入库 {result['inserted']} 条"
+        )
 
     elif args.step == "html":
-        print(f"\n>>> 执行第2步: fetch_html (获取详情页 HTML，status=1 → 20)\n")
+        logger.info(">>> 执行第2步: fetch_html (获取详情页 HTML，status=1 → 20)")
         result = crawler.fetch_html(limit=args.limit)
-        print(f"\n[结果] 共 {result['total']} 条, 成功 {result['success']} 条, 失败 {result['failed']} 条")
+        logger.info(
+            f"[结果] 共 {result['total']} 条, 成功 {result['success']} 条, 失败 {result['failed']} 条"
+        )
 
     elif args.step == "parse":
-        print(f"\n>>> 执行第3步: parse_detail (LLM 解析详情，status=20 → 30)\n")
+        logger.info(">>> 执行第3步: parse_detail (LLM 解析详情，status=20 → 30)")
         result = crawler.parse_detail(limit=args.limit)
-        print(f"\n[结果] 共 {result['total']} 条, 成功 {result['success']} 条, 失败 {result['failed']} 条")
+        logger.info(
+            f"[结果] 共 {result['total']} 条, 成功 {result['success']} 条, 失败 {result['failed']} 条"
+        )
 
 
 if __name__ == "__main__":

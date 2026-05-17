@@ -1,4 +1,5 @@
 """中国政府采购网爬虫实现."""
+import logging
 import re
 import time
 from typing import List, Optional
@@ -7,10 +8,12 @@ from urllib.parse import urljoin
 import requests
 from bs4 import BeautifulSoup
 
-from .db_storage import MySQLStorage
+from dao import *
+from model import ProcurementNotice
 from .llm_parser import LLMParser
-from .models import ProcurementNotice
 from .parser_utils import strip_html_noise
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_HEADERS = {
     "User-Agent": (
@@ -51,8 +54,7 @@ class CCGPCrawler:
     # -------------------------------------------------------------------------
     # 平台相关：LLM 解析配置
     # -------------------------------------------------------------------------
-    SYSTEM_PROMPT = "你是一个专业的政府采购网招标公告信息提取助手。"
-    TASK_PROMPT = """你的任务是从给定的政府采购公告页HTML中，提取关键的招标信息。
+    PROMPT = """你是一个专业的政府采购网招标公告信息提取助手，你的任务是从给定的政府采购公告页HTML中，提取关键的招标信息。
 需要提取的字段如下（字段名必须严格与下面列出的英文名称一致；如果文本中确实没有该信息，请返回 null，不要编造）：
     
 - project_name: 采购项目名称
@@ -139,8 +141,6 @@ class CCGPCrawler:
             delay: float = 1.0,
             max_retries: int = 3,
             timeout: int = 30,
-            llm_parser: Optional[LLMParser] = None,
-            db_storage: Optional[MySQLStorage] = None,
     ):
         """初始化爬虫.
 
@@ -149,8 +149,6 @@ class CCGPCrawler:
             delay: 请求间隔（秒）
             max_retries: 最大重试次数
             timeout: 请求超时时间
-            llm_parser: LLM 解析器实例（可选）
-            db_storage: MySQL 存储器实例（直接写入 procurement_notices 表）
         """
         if part not in self.PARTS:
             raise ValueError(f"不支持的栏目: {part}，可选: {list(self.PARTS.keys())}")
@@ -162,8 +160,6 @@ class CCGPCrawler:
         self.max_retries = max_retries
         self.timeout = timeout
         self._seen_urls = set()
-        self.llm_parser = llm_parser
-        self.db_storage = db_storage
         self.session = requests.Session()
         self.session.headers.update(DEFAULT_HEADERS)
 
@@ -175,9 +171,9 @@ class CCGPCrawler:
                 resp.encoding = resp.apparent_encoding or "utf-8"
                 if resp.status_code == 200:
                     return resp.text
-                print(f"[HTTP {resp.status_code}] {url}")
+                logger.warning(f"[HTTP {resp.status_code}] {url}")
             except requests.RequestException as e:
-                print(f"[请求失败] 第{attempt}次尝试: {url} - {e}")
+                logger.warning(f"[请求失败] 第{attempt}次尝试: {url} - {e}")
                 if attempt < self.max_retries:
                     time.sleep(self.delay * attempt)
         return None
@@ -198,7 +194,7 @@ class CCGPCrawler:
         soup = BeautifulSoup(html, "lxml")
         ul = soup.find("ul", class_="c_list_bid")
         if not ul:
-            print(f"[解析] 未找到列表容器: {list_url}")
+            logger.warning(f"[解析] 未找到列表容器: {list_url}")
             return notices
 
         for li in ul.find_all("li"):
@@ -402,7 +398,7 @@ class CCGPCrawler:
 
             notices = self._parse_list_page(html, url)
             all_notices.extend(notices)
-            print(f"[fetch_list] 第{page}页 获取 {len(notices)} 条，累计 {len(all_notices)} 条")
+            logger.info(f"[fetch_list] 第{page}页 获取 {len(notices)} 条，累计 {len(all_notices)} 条")
 
             if not notices and pages is None:
                 break  # 未指定页数时，无数据视为已到末尾
@@ -415,18 +411,18 @@ class CCGPCrawler:
                 self._seen_urls.add(n.url)
                 unique_notices.append(n)
         all_notices = unique_notices
-        print(f"[fetch_list] 去重后共 {len(all_notices)} 条")
+        logger.info(f"[fetch_list] 去重后共 {len(all_notices)} 条")
 
         # 过滤：仅保留"招标公告"类型
         tender_notices = [n for n in all_notices if self._is_tender_notice(n)]
         excluded = len(all_notices) - len(tender_notices)
         if excluded > 0:
-            print(f"[fetch_list] 排除非招标公告 {excluded} 条，保留 {len(tender_notices)} 条")
+            logger.info(f"[fetch_list] 排除非招标公告 {excluded} 条，保留 {len(tender_notices)} 条")
 
         # 存入数据库（INSERT IGNORE，跳过已存在的 URL）
         if tender_notices:
-            stats = self.db_storage.insert_list_notices(tender_notices)
-            print(
+            stats = ProcurementNoticeDao.instance().insert_list(tender_notices)
+            logger.info(
                 f"[fetch_list] 入库完成: 新增 {stats['inserted']} 条, "
                 f"跳过已存在 {stats['skipped']} 条"
             )
@@ -452,12 +448,12 @@ class CCGPCrawler:
         Returns:
             {"total": int, "success": int, "failed": int}
         """
-        notices = self.db_storage.fetch_by_status(status=1, platform=self.PLATFORM, limit=limit)
+        notices = ProcurementNoticeDao.instance().fetch_by_status(status=1, platform=self.PLATFORM, limit=limit)
         if not notices:
-            print("[fetch_html] 没有待获取 HTML 的记录")
+            logger.info("[fetch_html] 没有待获取 HTML 的记录")
             return {"total": 0, "success": 0, "failed": 0}
 
-        print(f"[fetch_html] 共 {len(notices)} 条待处理")
+        logger.info(f"[fetch_html] 共 {len(notices)} 条待处理")
         success = failed = 0
 
         for idx, notice in enumerate(notices, 1):
@@ -466,18 +462,18 @@ class CCGPCrawler:
             if html:
                 # 去掉 head/foot/css/js 等噪声标签，保留正文 HTML 结构
                 filtered_html = strip_html_noise(html)
-                ok = self.db_storage.update_html_content(notice.id, filtered_html)
+                ok = ProcurementNoticeDao.instance().update_html(notice.id, filtered_html)
                 if ok:
                     success += 1
-                    print(f"[fetch_html] {idx}/{len(notices)} 成功: {notice.project_name[:40]}...")
+                    logger.info(f"[fetch_html] {idx}/{len(notices)} 成功: {notice.project_name[:40]}...")
                 else:
                     failed += 1
-                    print(f"[fetch_html] {idx}/{len(notices)} 更新DB失败: {notice.url}")
+                    logger.error(f"[fetch_html] {idx}/{len(notices)} 更新DB失败: {notice.url}")
             else:
                 failed += 1
-                print(f"[fetch_html] {idx}/{len(notices)} 请求失败: {notice.url}")
+                logger.error(f"[fetch_html] {idx}/{len(notices)} 请求失败: {notice.url}")
 
-        print(f"[fetch_html] 完成: 成功 {success} 条, 失败 {failed} 条")
+        logger.info(f"[fetch_html] 完成: 成功 {success} 条, 失败 {failed} 条")
         return {"total": len(notices), "success": success, "failed": failed}
 
     # ========================================================================
@@ -493,25 +489,25 @@ class CCGPCrawler:
         Returns:
             {"total": int, "success": int, "failed": int}
         """
-        notices = self.db_storage.fetch_by_status(status=20, platform=self.PLATFORM, limit=limit)
+        notices = ProcurementNoticeDao.instance().fetch_by_status(status=20, platform=self.PLATFORM, limit=limit)
         if not notices:
-            print("[parse_detail] 没有待解析的记录")
+            logger.info("[parse_detail] 没有待解析的记录")
             return {"total": 0, "success": 0, "failed": 0}
 
-        print(f"[parse_detail] 共 {len(notices)} 条待处理")
+        logger.info(f"[parse_detail] 共 {len(notices)} 条待处理")
         success = failed = 0
 
         for idx, notice in enumerate(notices, 1):
             html = notice.html
             if not html:
-                print(f"[parse_detail] {idx}/{len(notices)} 跳过: 无HTML内容")
+                logger.warning(f"[parse_detail] {idx}/{len(notices)} 跳过: 无HTML内容")
                 failed += 1
                 continue
 
             try:
                 # 先按本平台 HTML 结构过滤无用内容，再传给 LLM
                 cleaned_text = self._clean_html_for_llm(html)
-                llm_result = self.llm_parser.parse(CCGPCrawler.SYSTEM_PROMPT, CCGPCrawler.TASK_PROMPT + cleaned_text)
+                llm_result = LLMParser.parse(CCGPCrawler.PROMPT + cleaned_text)
 
                 # 提取子表列表数据（这些字段不在 ProcurementNotice 模型中）
                 sub_attachments = llm_result.pop("notice_attachments", None) or []
@@ -527,22 +523,22 @@ class CCGPCrawler:
                 self._enrich_notice(notice)
 
                 notice.status = 30
-                ok = self.db_storage.update_parsed_detail(notice)
+                ok = ProcurementNoticeDao.instance().update_parsed(notice)
                 if ok:
                     # 主表更新成功后再插入子表数据
-                    self.db_storage.insert_notice_attachments(notice.id, sub_attachments)
-                    self.db_storage.insert_notice_packages(notice.id, sub_packages)
-                    self.db_storage.insert_notice_qualifications(notice.id, sub_qualifications)
+                    NoticeAttachmentDao.instance().insert(notice.id, sub_attachments)
+                    NoticePackageDao.instance().insert(notice.id, sub_packages)
+                    NoticeQualificationDao.instance().insert(notice.id, sub_qualifications)
                     success += 1
-                    print(f"[parse_detail-llm] {idx}/{len(notices)} 成功: {notice.project_name[:40]}...")
+                    logger.info(f"[parse_detail-llm] {idx}/{len(notices)} 成功: {notice.project_name[:40]}...")
                 else:
                     failed += 1
-                    print(f"[parse_detail] {idx}/{len(notices)} 更新DB失败: id={notice.id}")
+                    logger.error(f"[parse_detail] {idx}/{len(notices)} 更新DB失败: id={notice.id}")
             except Exception as e:
                 failed += 1
-                print(f"[parse_detail] {idx}/{len(notices)} 解析失败: {e}")
+                logger.error(f"[parse_detail] {idx}/{len(notices)} 解析失败: {e}")
 
-        print(f"[parse_detail] 完成: 成功 {success} 条, 失败 {failed} 条")
+        logger.info(f"[parse_detail] 完成: 成功 {success} 条, 失败 {failed} 条")
         return {"total": len(notices), "success": success, "failed": failed}
 
     # ========================================================================
@@ -557,9 +553,9 @@ class CCGPCrawler:
 
         主要用于快速测试或一次性全量跑通，生产环境建议分进程执行。
         """
-        print("=" * 60)
-        print(f"[run] 开始三步流程 - 栏目: {self.part}")
-        print("=" * 60)
+        logger.info("=" * 60)
+        logger.info(f"[run] 开始三步流程 - 栏目: {self.part}")
+        logger.info("=" * 60)
 
         # 1. fetch_list
         list_stats = self.fetch_list(pages=pages)
@@ -570,12 +566,12 @@ class CCGPCrawler:
         # 3. parse_detail
         parse_stats = self.parse_detail(limit=9999)
 
-        print("=" * 60)
-        print("[run] 三步流程全部完成")
-        print(f"  fetch_list : 插入 {list_stats.get('inserted', 0)} 条")
-        print(f"  fetch_html : 成功 {html_stats.get('success', 0)} 条")
-        print(f"  parse_detail: 成功 {parse_stats.get('success', 0)} 条")
-        print("=" * 60)
+        logger.info("=" * 60)
+        logger.info("[run] 三步流程全部完成")
+        logger.info(f"  fetch_list : 插入 {list_stats.get('inserted', 0)} 条")
+        logger.info(f"  fetch_html : 成功 {html_stats.get('success', 0)} 条")
+        logger.info(f"  parse_detail: 成功 {parse_stats.get('success', 0)} 条")
+        logger.info("=" * 60)
         return {
             "fetch_list": list_stats,
             "fetch_html": html_stats,
