@@ -8,6 +8,8 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional, Tuple
 
+from bs4 import BeautifulSoup
+
 
 # ---------------------------------------------------------------------------
 # 省市区解析
@@ -26,12 +28,12 @@ def extract_region(
     address: Optional[str] = None,
     region: Optional[str] = None,
     administrative_region: Optional[str] = None,
-) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+) -> Tuple[str, str, str]:
     """从地址信息中解析省、市、区/县.
 
-    返回: (province, city, district)
+    返回: (province, city, district)，解析失败时返回空字符串
     """
-    province = city = district = None
+    province = city = district = ""
 
     # --- 省份 ---
     if region:
@@ -73,7 +75,7 @@ def extract_region(
         ):
             city = administrative_region
 
-    return province, city, district
+    return province or "", city or "", district or ""
 
 
 def _normalize_province(name: str) -> str:
@@ -112,7 +114,7 @@ _DT_PATTERNS = [
 ]
 
 
-def standardize_publish_time(publish_time: Optional[str]) -> Optional[str]:
+def standardize_publish_time(publish_time: Optional[str]) -> str:
     """将发布时间统一为标准格式: YYYY-MM-DD HH:MM.
 
     示例:
@@ -124,7 +126,7 @@ def standardize_publish_time(publish_time: Optional[str]) -> Optional[str]:
         '2026-06-01 09:30'
     """
     if not publish_time:
-        return None
+        return ""
 
     text = publish_time.strip()
     for pattern, fmt in _DT_PATTERNS:
@@ -147,7 +149,7 @@ def standardize_publish_time(publish_time: Optional[str]) -> Optional[str]:
                     return dt.strftime("%Y-%m-%d")
             except ValueError:
                 continue
-    return None
+    return ""
 
 
 # ---------------------------------------------------------------------------
@@ -158,7 +160,7 @@ _DATE_RE = re.compile(r"(\d{4})[年/-](\d{1,2})[月/-](\d{1,2})日?")
 _TIME_RE = re.compile(r"(\d{1,2})[：:](\d{2})")
 
 
-def parse_time_range(text: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
+def parse_time_range(text: Optional[str]) -> Tuple[str, str]:
     """从时间范围文本解析开始和结束时间.
 
     支持格式:
@@ -166,14 +168,14 @@ def parse_time_range(text: Optional[str]) -> Tuple[Optional[str], Optional[str]]
         - "2026-05-15 09:00 至 2026-05-24 17:00"
         - "2026年05月15日至2026年05月24日，每天上午9：00至12：00，下午14：00至17：00"
 
-    返回: (start_time, end_time)，格式均为 YYYY-MM-DD HH:MM
+    返回: (start_time, end_time)，格式均为 YYYY-MM-DD HH:MM，解析失败返回 ("", "")
 
     示例:
         >>> parse_time_range("2026年05月17日至2026年05月24日每日上午:00:00 至 12:00 下午:12:00 至 23:59")
         ('2026-05-17 00:00', '2026-05-24 23:59')
     """
     if not text:
-        return None, None
+        return "", ""
 
     # 提取所有日期
     dates = []
@@ -191,8 +193,8 @@ def parse_time_range(text: Optional[str]) -> Tuple[Optional[str], Optional[str]]
     start_time = times[0] if len(times) >= 1 else "00:00"
     end_time = times[-1] if len(times) >= 1 else "23:59"
 
-    start = f"{start_date} {start_time}" if start_date else None
-    end = f"{end_date} {end_time}" if end_date else None
+    start = f"{start_date} {start_time}" if start_date else ""
+    end = f"{end_date} {end_time}" if end_date else ""
     return start, end
 
 
@@ -217,11 +219,11 @@ def parse_amount(text: Optional[str]) -> Optional[Decimal]:
         Decimal('797217.0000')
     """
     if not text:
-        return None
+        return ""
 
     text = text.strip()
     if not text or text in ("-", "—", "无", "null", "NULL"):
-        return None
+        return ""
 
     m = _AMOUNT_PATTERNS[0].search(text)
     if m:
@@ -290,10 +292,10 @@ _PROJECT_CODE_PATTERNS = [
 
 def extract_project_code(
     content_text: Optional[str], title: Optional[str] = None
-) -> Optional[str]:
-    """从正文或标题中提取项目编号."""
+) -> str:
+    """从正文或标题中提取项目编号，未找到返回空字符串."""
     if not content_text and not title:
-        return None
+        return ""
 
     texts = []
     if content_text:
@@ -317,14 +319,14 @@ def extract_project_code(
 # 采购方联系人解析
 # ---------------------------------------------------------------------------
 
-def parse_purchaser_contact_person(content_text: Optional[str]) -> Optional[str]:
-    """从正文'采购人信息'区块中尝试提取联系人姓名.
+def parse_purchaser_contact_person(content_text: Optional[str]) -> str:
+    """从正文'采购人信息'区块中尝试提取联系人姓名，未找到返回空字符串.
 
     大部分政府采购公告的采购人信息只有名称、地址、联系方式，
     没有单独列联系人。本函数做尽力而为的提取。
     """
     if not content_text:
-        return None
+        return ""
 
     # 匹配 "采购人信息" 区块后 500 字符内的 "联系人"
     m = re.search(
@@ -338,3 +340,118 @@ def parse_purchaser_contact_person(content_text: Optional[str]) -> Optional[str]
         if re.search(r"[\u4e00-\u9fa5]", name):
             return name
     return None
+
+
+# ---------------------------------------------------------------------------
+# HTML 清理（用于 LLM 解析前过滤无用内容）
+# ---------------------------------------------------------------------------
+
+_NOISE_TAGS = {"script", "style", "nav", "footer", "header", "iframe", "noscript", "aside", "svg", "canvas"}
+_NOISE_CLASSES = re.compile(
+    r"header|footer|nav|menu|sidebar|breadcrumb|banner|advert|ad-|toolbar|modal|popup|dialog",
+    re.IGNORECASE,
+)
+
+
+def clean_html_for_llm(html: str, max_length: int = 15000) -> str:
+    """清理 HTML，过滤 header/foot/js/css 等噪声，提取正文内容.
+
+    针对中国政府采购网详情页做了优化：
+    - 优先提取 vF_detail_content（正文）、vF_detail_header（标题）、table（概要表格）
+    - 去掉 script/style/nav/footer/header 等标签及其内容
+    - 合并多余空白，控制总长度
+
+    Args:
+        html: 原始 HTML 字符串
+        max_length: 返回文本的最大长度
+
+    Returns:
+        清理后的纯文本
+    """
+    if not html:
+        return ""
+
+    soup = BeautifulSoup(html, "lxml")
+
+    # 1. 去掉已知噪声标签
+    for tag in soup.find_all(_NOISE_TAGS):
+        tag.decompose()
+
+    # 2. 去掉带有噪声 class/id 的标签
+    for tag in soup.find_all(True):
+        classes = " ".join(tag.get("class", []))
+        tag_id = tag.get("id", "")
+        if _NOISE_CLASSES.search(classes) or _NOISE_CLASSES.search(tag_id):
+            tag.decompose()
+
+    # 3. 针对政府采购网提取主要内容区域
+    main_blocks = []
+    selectors = [
+        ("div", {"class": "vF_detail_header"}),
+        ("div", {"class": "table"}),
+        ("div", {"class": "vF_detail_content"}),
+    ]
+    for tag_name, attrs in selectors:
+        block = soup.find(tag_name, attrs=attrs)
+        if block:
+            main_blocks.append(block.get_text(separator="\n", strip=True))
+
+    if main_blocks:
+        text = "\n\n".join(main_blocks)
+    else:
+        #  fallback：提取 body 全部文本
+        body = soup.find("body")
+        text = body.get_text(separator="\n", strip=True) if body else soup.get_text(separator="\n", strip=True)
+
+    # 4. 合并多余空白
+    text = re.sub(r"\n\s*\n+", "\n\n", text)
+    text = re.sub(r"[ \t]+", " ", text)
+    lines = [line.strip() for line in text.split("\n") if line.strip()]
+    text = "\n".join(lines)
+
+    # 5. 截断
+    if len(text) > max_length:
+        text = text[:max_length] + "\n...[内容已截断]"
+
+    return text
+
+
+# ---------------------------------------------------------------------------
+# HTML 噪声过滤（保留 HTML 结构，去掉 head/foot/css/js）
+# ---------------------------------------------------------------------------
+
+_NOISE_HTML_TAGS = {"head", "script", "style", "nav", "footer", "header", "iframe", "noscript", "aside", "svg", "canvas", "link", "meta"}
+
+
+def strip_html_noise(html: str) -> str:
+    """去掉 HTML 中的 head/foot/css/js 等噪声标签，保留正文 HTML 结构.
+
+    适用于 fetch_html 阶段存储过滤后的详情页 HTML。
+
+    Args:
+        html: 原始 HTML 字符串
+
+    Returns:
+        过滤后的 HTML 字符串
+    """
+    if not html:
+        return ""
+
+    soup = BeautifulSoup(html, "lxml")
+
+    # 去掉已知噪声标签及其内容
+    for tag in soup.find_all(_NOISE_HTML_TAGS):
+        tag.decompose()
+
+    # 返回过滤后的 HTML（优先 body，否则整个文档）
+    body = soup.find("body")
+    if body:
+        return str(body)
+    return str(soup)
+    text = "\n".join(lines)
+
+    # 5. 截断
+    if len(text) > max_length:
+        text = text[:max_length] + "\n...[内容已截断]"
+
+    return text

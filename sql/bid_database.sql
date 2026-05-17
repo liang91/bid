@@ -15,11 +15,13 @@ USE bid;
 -- ------------------------------------------------------------
 CREATE TABLE procurement_notices (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    platform VARCHAR(64) NOT NULL DEFAULT '' COMMENT '平台：中国政府采购网',
+    part VARCHAR(32) NOT NULL DEFAULT '' COMMENT '爬取栏目：中央公告/地方公告',
+    title VARCHAR(256) NOT NULL DEFAULT '' COMMENT '列表页原始标题',
     notice_type VARCHAR(32) NOT NULL DEFAULT '' COMMENT '公告类型：公开招标/竞争性谈判/询价/结果公告/废标公告',
 
     -- 来源信息
     url VARCHAR(256) NOT NULL DEFAULT '' COMMENT '来源URL',
-    platform VARCHAR(64) NOT NULL DEFAULT '' COMMENT '平台：中国政府采购网',
     region_province VARCHAR(32) NOT NULL DEFAULT '' COMMENT '省/自治区/直辖市',
     region_city VARCHAR(32) NOT NULL DEFAULT '' COMMENT '市/直辖市辖区',
     region_district VARCHAR(32) NOT NULL DEFAULT '' COMMENT '区/县',
@@ -80,10 +82,11 @@ CREATE TABLE procurement_notices (
 
     -- 原始摘要
     raw_abstract TEXT COMMENT '原文摘要',
+    html MEDIUMTEXT COMMENT '详情页原始HTML内容',
     parse_time DATETIME NOT NULL DEFAULT '1970-01-01 00:00:00' COMMENT '解析时间',
 
-    -- 状态
-    status TINYINT NOT NULL DEFAULT 1 COMMENT '1:有效 2:已过期 3:已废标',
+    -- 状态（爬取流程状态）
+    status TINYINT NOT NULL DEFAULT 1 COMMENT '1:获取概要信息 20:获取了网页内容 30:解析出了公告内容',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建/爬取时间',
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '数据更新时间',
 
@@ -253,3 +256,11 @@ CREATE TABLE match_results (
     INDEX idx_final_score (final_score),
     INDEX idx_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='供应商-招标公告匹配结果表';
+
+-- ============================================================
+-- 迁移脚本：从旧版表结构升级（如已存在表，执行以下 ALTER）
+-- ============================================================
+-- ALTER TABLE procurement_notices
+--     ADD COLUMN html MEDIUMTEXT COMMENT '详情页原始HTML内容' AFTER raw_abstract;
+-- ALTER TABLE procurement_notices
+--     MODIFY COLUMN status TINYINT NOT NULL DEFAULT 1 COMMENT '1:获取概要信息 20:获取了网页内容 30:解析出了公告内容';

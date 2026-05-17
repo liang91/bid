@@ -8,11 +8,21 @@ from typing import Optional, Type
 
 from openai import OpenAI
 
-from .models import BidNotice
+from .config_loader import load_config
+from .models import ProcurementNotice
 
 
-DEFAULT_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
-DEFAULT_MODEL = "doubao-seed-2-0-lite-260215"
+# 加载配置（模块级缓存）
+_cfg = None
+
+def _get_config():
+    global _cfg
+    if _cfg is None:
+        try:
+            _cfg = load_config()
+        except FileNotFoundError:
+            _cfg = {}
+    return _cfg
 
 SYSTEM_PROMPT = """你是一个专业的中国政府采购网招标公告信息提取助手。
 你的任务是从给定的政府采购公告文本中，提取关键的招标/中标信息，并以严格的 JSON 格式返回。
@@ -91,32 +101,46 @@ class LLMParser:
 
     def __init__(
         self,
-        api_key: str,
-        base_url: str = DEFAULT_BASE_URL,
-        model: str = DEFAULT_MODEL,
-        timeout: int = 60,
-        max_retries: int = 2,
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+        model: Optional[str] = None,
+        timeout: Optional[int] = None,
+        max_retries: Optional[int] = None,
+        max_tokens: Optional[int] = None,
     ):
-        self.model = model
+        cfg = _get_config()
+
+        self.api_key = api_key or cfg.get("llm.api_key") or ""
+        self.base_url = base_url or cfg.get("llm.base_url") or "https://ark.cn-beijing.volces.com/api/v3"
+        self.model = model or cfg.get("llm.model") or "doubao-seed-2-0-lite-260215"
+        self.timeout = timeout if timeout is not None else cfg.get("llm.timeout", 60)
+        self.max_retries = max_retries if max_retries is not None else cfg.get("llm.max_retries", 2)
+        self.max_tokens = max_tokens if max_tokens is not None else cfg.get("llm.max_tokens", 2048)
+
+        if not self.api_key:
+            raise ValueError(
+                "LLM API Key 未配置。请在 config.yaml 的 llm.api_key 中设置。"
+            )
+
         self.client = OpenAI(
-            base_url=base_url,
-            api_key=api_key,
-            timeout=timeout,
-            max_retries=max_retries,
+            base_url=self.base_url,
+            api_key=self.api_key,
+            timeout=self.timeout,
+            max_retries=self.max_retries,
         )
 
-    def parse(self, html: str, notice: Optional[BidNotice] = None) -> BidNotice:
-        """解析详情页 HTML，返回填充好的 BidNotice.
+    def parse(self, html: str, notice: Optional[ProcurementNotice] = None) -> ProcurementNotice:
+        """解析详情页 HTML，返回填充好的 ProcurementNotice.
 
         Args:
             html: 详情页原始 HTML
-            notice: 已有的 BidNotice 实例（可选），用于复用基础字段
+            notice: 已有的 ProcurementNotice 实例（可选），用于复用基础字段
 
         Returns:
-            填充好的 BidNotice 实例
+            填充好的 ProcurementNotice 实例
         """
         if notice is None:
-            notice = BidNotice()
+            notice = ProcurementNotice()
 
         text = clean_html_text(html)
 
@@ -128,7 +152,7 @@ class LLMParser:
                     {"role": "user", "content": f"请从以下政府采购公告文本中提取信息：\n\n{text}\n"},
                 ],
                 temperature=0.1,
-                max_tokens=2048,
+                max_tokens=self.max_tokens,
             )
             raw_content = response.choices[0].message.content or ""
             result = self._extract_json(raw_content)
@@ -152,48 +176,56 @@ class LLMParser:
             content = "\n".join(lines).strip()
         return json.loads(content)
 
-    def _apply_to_notice(self, data: dict, notice: BidNotice) -> None:
-        """将解析结果应用到 BidNotice 模型."""
+    def _apply_to_notice(self, data: dict, notice: ProcurementNotice) -> None:
+        """将解析结果应用到 ProcurementNotice 模型（字段已对齐 SQL 表）."""
         field_map = {
+            # 项目信息
             "project_name": "project_name",
-            "category": "category",
-            "purchaser_unit": "purchaser_unit",
-            "administrative_region": "administrative_region",
-            "bid_document_time": "bid_document_time",
-            "bid_document_price": "bid_document_price",
-            "bid_document_location": "bid_document_location",
+            "category": "category_name",
+            "purchaser_unit": "purchaser_name",
+            "administrative_region": "purchaser_region",
+            # 时间/费用
+            "bid_document_time": "doc_obtain_start",      # 原始文本，后续再拆分
+            "bid_document_price": "doc_price",
+            "bid_document_location": "bid_platform",
             "bid_open_time": "bid_open_time",
-            "bid_open_location": "bid_open_location",
-            "budget_amount": "budget_amount",
-            "total_bid_amount": "total_bid_amount",
-            "review_experts": "review_experts",
-            "contact_person": "contact_person",
-            "contact_phone": "contact_phone",
+            "bid_open_location": "bid_platform",
+            # 金额
+            "budget_amount": "budget",
+            # 联系人
+            "contact_person": "project_contact_person",
+            "contact_phone": "project_contact_phone",
             "purchaser_address": "purchaser_address",
-            "purchaser_contact": "purchaser_contact",
+            "purchaser_contact": "purchaser_contact_phone",
+            # 代理机构
             "agency_name": "agency_name",
             "agency_address": "agency_address",
-            "agency_contact": "agency_contact",
-            "province": "province",
-            "city": "city",
-            "district": "district",
-            "publish_time_std": "publish_time_std",
-            "project_code": "project_code",
+            "agency_contact": "agency_contact_phone",
+            # 地区
+            "province": "region_province",
+            "city": "region_city",
+            "district": "region_district",
+            # 时间
+            "publish_time_std": "notice_date",
+            "project_code": "project_no",
+            # 采购方标准化
             "purchaser_name": "purchaser_name",
-            "purchaser_address_std": "purchaser_address_std",
+            "purchaser_address_std": "purchaser_address",
             "purchaser_contact_person": "purchaser_contact_person",
             "purchaser_contact_phone": "purchaser_contact_phone",
-            "agency_name_std": "agency_name_std",
-            "agency_address_std": "agency_address_std",
+            # 代理机构标准化
+            "agency_name_std": "agency_name",
+            "agency_address_std": "agency_address",
             "agency_contact_phone": "agency_contact_phone",
+            # 项目联系
             "project_contact_person": "project_contact_person",
             "project_contact_phone": "project_contact_phone",
-            "budget_amount_fen": "budget_amount_fen",
-            "bid_doc_start_time": "bid_doc_start_time",
-            "bid_doc_end_time": "bid_doc_end_time",
-            "response_deadline": "response_deadline",
-            "bid_start_time": "bid_start_time",
-            "bid_location_std": "bid_location_std",
+            # 时间拆分
+            "bid_doc_start_time": "doc_obtain_start",
+            "bid_doc_end_time": "doc_obtain_end",
+            "response_deadline": "bid_deadline",
+            "bid_start_time": "bid_open_time",
+            "bid_location_std": "bid_platform",
         }
 
         for json_key, model_field in field_map.items():
@@ -201,7 +233,7 @@ class LLMParser:
             if value is not None and value != "":
                 setattr(notice, model_field, str(value))
 
-        # content_summary 存入 content_text（如果 content_text 为空）
+        # content_summary 存入 raw_abstract（如果 raw_abstract 为空）
         summary = data.get("content_summary")
-        if summary and not notice.content_text:
-            notice.content_text = str(summary)
+        if summary and not notice.raw_abstract:
+            notice.raw_abstract = str(summary)

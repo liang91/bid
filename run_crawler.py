@@ -1,26 +1,28 @@
 #!/usr/bin/env python3
 """中国政府采购网爬虫入口脚本.
 
+支持分步骤执行爬取流程（方便调度与错误排查）：
+    python run_crawler.py --step list       # 第1步：爬取列表页，保存概要信息
+    python run_crawler.py --step html       # 第2步：获取详情页 HTML
+    python run_crawler.py --step parse      # 第3步：LLM 解析详情内容
+
+
 用法示例:
-    # 爬取地方公告前2页（仅列表信息）
-    python run_crawler.py --pages 2
+    # 只爬取2页列表
+    python run_crawler.py --step list --pages 2
 
-    # 爬取中央公告前1页，并获取详情
-    python run_crawler.py --column zygg --pages 1 --detail
+    # 获取详情页 HTML（每次默认处理100条）
+    python run_crawler.py --step html --limit 50
 
-    # 按地域和关键词过滤
-    python run_crawler.py --pages 5 --region 北京 --keyword 信息化
+    # 解析详情（使用 LLM）
+    python run_crawler.py --step parse --limit 20
 
-    # 使用 LLM 解析详情页（替代传统 HTML 解析）
-    python run_crawler.py --pages 2 --detail --llm
-
-    # 使用 LLM 解析，并指定其他模型
-    python run_crawler.py --pages 2 --detail --llm --llm-model doubao-seed-2-0-lite-260215
 """
 import argparse
 import sys
 
 from crawlers.ccgp import CCGPCrawler
+from crawlers.config_loader import load_config
 
 
 def main():
@@ -28,162 +30,111 @@ def main():
         description="中国政府采购网招标信息爬虫",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-示例:
-  python run_crawler.py --pages 2
-  python run_crawler.py --column zygg --pages 1 --detail
-  python run_crawler.py --pages 5 --region 辽宁 --keyword 环保 --detail
-  python run_crawler.py --pages 2 --detail --llm
+配置说明:
+  所有数据库连接、LLM API 密钥等配置信息均从项目根目录 config.yaml 读取。
+
+分步执行示例:
+  python run_crawler.py --step list --pages 1
+  python run_crawler.py --step html --limit 2
+  python run_crawler.py --step parse --limit 2
+
         """,
     )
+
+    # 步骤控制（核心参数）
     parser.add_argument(
-        "--column",
+        "--step",
         type=str,
-        default="zygg",
+        required=True,
+        choices=["list", "html", "parse"],
+        help="执行步骤: list=爬列表, html=获取详情HTML, parse=LLM解析",
+    )
+
+    # 运行时控制参数
+    parser.add_argument(
+        "--part",
+        type=str,
+        default="dfgg",
         choices=["dfgg", "zygg"],
-        help="爬取栏目: dfgg=地方公告, zygg=中央公告 (默认: dfgg)",
+        help="爬取栏目: dfgg=地方公告, zygg=中央公告",
     )
     parser.add_argument(
         "--pages",
         type=int,
         default=1,
-        help="爬取页数 (默认: 1, 设为0则爬取全部)",
+        help="爬取页数 (默认: 1, 设为0则爬取全部，仅 --step list 有效)",
     )
     parser.add_argument(
-        "--detail",
-        action="store_true",
-        help="是否爬取详情页（会大幅增加请求量和耗时）",
+        "--limit",
+        type=int,
+        default=100,
+        help="每次处理的最大条数 (默认: 100，仅 --step html/parse 有效)",
     )
-    parser.add_argument(
-        "--llm",
-        action="store_true",
-        help="使用 LLM（豆包模型）解析详情页，替代传统的 HTML 解析",
-    )
-    parser.add_argument(
-        "--llm-api-key",
-        type=str,
-        default="791b346d-6956-432d-a3f2-1d206edbd7f1",
-        help="豆包/火山引擎 API Key",
-    )
-    parser.add_argument(
-        "--llm-model",
-        type=str,
-        default="doubao-seed-2-0-lite-260215",
-        help="LLM 模型名称",
-    )
-    parser.add_argument(
-        "--region",
-        type=str,
-        default=None,
-        help="按地域过滤，如: 北京、辽宁、江苏",
-    )
-    parser.add_argument(
-        "--type",
-        type=str,
-        default=None,
-        dest="notice_type",
-        help="按公告类型过滤，如: 公开招标、中标公告、竞争性磋商",
-    )
-    parser.add_argument(
-        "--keyword",
-        type=str,
-        default=None,
-        help="按标题关键词过滤",
-    )
-
     parser.add_argument(
         "--delay",
         type=float,
         default=1.0,
         help="请求间隔秒数 (默认: 1.0)",
     )
-    parser.add_argument(
-        "--output",
-        type=str,
-        default="data",
-        help="输出目录 (默认: data)",
-    )
-
-    # 数据库连接参数
-    parser.add_argument(
-        "--db-host",
-        type=str,
-        default="localhost",
-        help="MySQL 主机 (默认: localhost)",
-    )
-    parser.add_argument(
-        "--db-port",
-        type=int,
-        default=3306,
-        help="MySQL 端口 (默认: 3306)",
-    )
-    parser.add_argument(
-        "--db-user",
-        type=str,
-        default="root",
-        help="MySQL 用户名 (默认: root)",
-    )
-    parser.add_argument(
-        "--db-password",
-        type=str,
-        default="",
-        help="MySQL 密码",
-    )
-    parser.add_argument(
-        "--db-name",
-        type=str,
-        default="bid",
-        help="MySQL 数据库名 (默认: bid)",
-    )
-    parser.add_argument(
-        "--no-db",
-        action="store_true",
-        help="禁用数据库写入，仅爬取不存储",
-    )
 
     args = parser.parse_args()
+
+    # 加载配置文件（固定路径：项目根目录 config.yaml）
+    try:
+        load_config()
+        print("[配置] 已加载配置文件")
+    except FileNotFoundError as e:
+        print(f"[配置] 警告: {e}")
 
     # pages=0 表示爬取全部
     pages = None if args.pages == 0 else args.pages
 
-    from crawlers.llm_parser import LLMParser
-
+    # 初始化 LLM 解析器（parse 步骤必须）
     llm_parser = None
-    if args.llm:
-        llm_parser = LLMParser(
-            api_key=args.llm_api_key,
-            model=args.llm_model,
-        )
-        print(f"[LLM] 已启用 LLM 解析，模型: {args.llm_model}")
+    if args.step == "parse":
+        from crawlers.llm_parser import LLMParser
+        try:
+            llm_parser = LLMParser()
+            print(f"[LLM] 已启用 LLM 解析，模型: {llm_parser.model}")
+        except ValueError as e:
+            print(f"[LLM] 初始化失败: {e}")
+            sys.exit(1)
 
     # 初始化数据库存储
-    db_storage = None
-    if not args.no_db:
-        from crawlers.db_storage import MySQLStorage
-        db_storage = MySQLStorage(
-            host=args.db_host,
-            port=args.db_port,
-            user=args.db_user,
-            password=args.db_password,
-            database=args.db_name,
+    from crawlers.db_storage import MySQLStorage
+    try:
+        db_storage = MySQLStorage()
+        print(
+            f"[数据库] 已连接到 "
+            f"{db_storage.conn_params['host']}:{db_storage.conn_params['port']}/"
+            f"{db_storage.conn_params['database']}"
         )
-        print(f"[数据库] 已连接到 {args.db_host}:{args.db_port}/{args.db_name}")
+    except Exception as e:
+        print(f"[数据库] 连接失败: {e}")
+        sys.exit(1)
 
     crawler = CCGPCrawler(
-        column=args.column,
+        part=args.part,
         delay=args.delay,
-        storage=__import__("crawlers.storage", fromlist=["Storage"]).Storage(args.output),
         llm_parser=llm_parser,
         db_storage=db_storage,
     )
 
-    crawler.run(
-        pages=pages,
-        fetch_detail=args.detail,
-        use_llm=args.llm,
-        region=args.region,
-        notice_type=args.notice_type,
-        keyword=args.keyword,
-    )
+    # 根据步骤执行
+    if args.step == "list":
+        print(f"\n>>> 执行第1步: fetch_list (爬取列表页，保存概要信息)\n")
+        result = crawler.fetch_list(pages=pages)
+        print(f"\n[结果] 爬取 {result['crawled']} 条, 过滤后 {result['filtered']} 条, 入库 {result['inserted']} 条")
+
+    elif args.step == "html":
+        print(f"\n>>> 执行第2步: fetch_html (获取详情页 HTML，status=1 → 20)\n")
+        result = crawler.fetch_html(limit=args.limit)
+        print(f"\n[结果] 共 {result['total']} 条, 成功 {result['success']} 条, 失败 {result['failed']} 条")
+
+    elif args.step == "parse":
+        print(f"\n>>> 执行第3步: parse_detail (LLM 解析详情，status=20 → 30)\n")
+        result = crawler.parse_detail(limit=args.limit)
+        print(f"\n[结果] 共 {result['total']} 条, 成功 {result['success']} 条, 失败 {result['failed']} 条")
 
 
 if __name__ == "__main__":

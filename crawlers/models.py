@@ -1,84 +1,102 @@
 """数据模型定义."""
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
-from typing import Optional
 import json
 
 
 @dataclass
-class BidNotice:
-    """招标公告数据模型."""
+class ProcurementNotice:
+    """招标公告数据模型，字段与 procurement_notices 表一一对应."""
 
-    # 基础信息（列表页获取）
-    title: str = ""                           # 标题
-    url: str = ""                             # 详情页链接
-    notice_type: str = ""                     # 公告类型（公开招标、中标公告等）
-    publish_time: str = ""                    # 发布时间
-    region: str = ""                          # 地域/省份
-    purchaser: str = ""                       # 采购人
+    # === 数据库主键 ===
+    id: int = 0                               # 数据库自增ID
 
-    # 详情页信息
-    project_name: Optional[str] = None        # 采购项目名称
-    category: Optional[str] = None            # 品目
-    purchaser_unit: Optional[str] = None      # 采购单位
-    administrative_region: Optional[str] = None  # 行政区域
-    bid_document_time: Optional[str] = None   # 获取招标文件时间
-    bid_document_price: Optional[str] = None  # 招标文件售价
-    bid_document_location: Optional[str] = None  # 获取招标文件的地点
-    bid_open_time: Optional[str] = None       # 开标时间
-    bid_open_location: Optional[str] = None   # 开标地点
-    budget_amount: Optional[str] = None       # 预算金额
-    total_bid_amount: Optional[str] = None    # 总中标金额
-    review_experts: Optional[str] = None      # 评审专家名单
-    contact_person: Optional[str] = None      # 项目联系人
-    contact_phone: Optional[str] = None       # 项目联系电话
-    purchaser_address: Optional[str] = None   # 采购单位地址
-    purchaser_contact: Optional[str] = None   # 采购单位联系方式
-    agency_name: Optional[str] = None         # 代理机构名称
-    agency_address: Optional[str] = None      # 代理机构地址
-    agency_contact: Optional[str] = None      # 代理机构联系方式
-    content_text: Optional[str] = None        # 正文纯文本内容
-    content_html: Optional[str] = None        # 正文HTML内容
+    # === 来源信息 ===
+    platform: str = ""                        # 平台
+    part: str = ""                            # 爬取栏目：中央公告/地方公告
+    title: str = ""                           # 列表页原始标题
+
+    # === 核心信息 ===
+    notice_type: str = ""                     # 公告类型
+    url: str = ""                             # 来源URL
+
+    # === 地区 ===
+    region_province: str = ""                 # 省/自治区/直辖市
+    region_city: str = ""                     # 市/直辖市辖区
+    region_district: str = ""                 # 区/县
+
+    # === 项目信息 ===
+    project_name: str = ""                    # 项目名称
+    project_no: str = ""                      # 项目编号
+    purchase_plan_no: str = ""                # 采购计划编号
+
+    # === 金额（原始字符串，入库时由 db_storage 转换为 Decimal） ===
+    budget: str = ""                          # 预算金额
+    max_limit: str = ""                       # 最高限价
+    currency: str = "CNY"                     # 币种
+
+    # === 品目 ===
+    category_code: str = ""                   # 采购品目编码
+    category_name: str = ""                   # 采购品目名称
+
+    # === 采购方式 ===
+    method: str = ""                          # 公开招标/竞争性谈判/询价/单一来源
+    joint_bid_allowed: int = 0                # 是否接受联合体
+    joint_bid_max_members: int = 1            # 联合体最多成员数
+    sme_oriented: int = 0                     # 是否面向中小企业
+
+    # === 时间节点（原始字符串，入库时由 db_storage 转换为 datetime） ===
+    notice_date: str = ""                     # 公告发布日期
+    doc_obtain_start: str = ""                # 文件获取开始
+    doc_obtain_end: str = ""                  # 文件获取截止
+    bid_deadline: str = ""                    # 投标截止
+    bid_open_time: str = ""                   # 开标时间
+
+    # === 投标方式 ===
+    bid_platform: str = ""                    # 投标平台
+    bid_platform_url: str = ""                # 投标平台URL
+    ca_required: int = 0                      # 是否需要CA证书
+    doc_price: str = ""                       # 标书费用
+
+    # === 采购方（采购人）信息 ===
+    purchaser_name: str = ""                  # 采购人名称
+    purchaser_address: str = ""               # 采购人地址
+    purchaser_contact_person: str = ""        # 采购人联系人
+    purchaser_contact_phone: str = ""         # 采购人联系电话
+    purchaser_region: str = ""                # 采购人地区
+
+    # === 代理机构信息 ===
+    agency_name: str = ""                     # 代理机构名称
+    agency_address: str = ""                  # 代理机构地址
+    agency_contact_person: str = ""           # 代理机构联系人
+    agency_contact_phone: str = ""            # 代理机构联系电话
+    agency_region: str = ""                   # 代理机构地区
+
+    # === 项目联系人信息 ===
+    project_contact_person: str = ""          # 项目联系人
+    project_contact_phone: str = ""           # 项目联系方式
+
+    # === 匹配特征 ===
+    qualification_summary: str = ""           # 资质要求摘要
+    industry_tags: list = field(default_factory=list)      # 行业标签
+    keywords: list = field(default_factory=list)             # 关键词
+    suggested_company_types: list = field(default_factory=list)  # 建议供应商类型
+    geographic_advantage: str = ""            # 地域优势
+
+    # === 原始摘要 ===
+    raw_abstract: str = ""                    # 原文摘要
+    html: str = ""                            # 详情页原始HTML
+    parse_time: str = ""                      # 解析时间
+
+    # === 状态（爬取流程状态） ===
+    status: int = 1                           # 1:获取概要信息 20:获取了网页内容 30:解析出了公告内容
+    created_at: str = field(default_factory=lambda: datetime.now().isoformat())
+    updated_at: str = ""
+
+    # ---------------------------------------------------------
+    # 以下为爬虫辅助字段（非数据库字段，用于解析中间状态/溯源）
+    # ---------------------------------------------------------
     attachments: list = field(default_factory=list)  # 附件列表
-
-    # 解析提取的字段
-    province: Optional[str] = None              # 省
-    city: Optional[str] = None                  # 市
-    district: Optional[str] = None              # 区/县
-    publish_time_std: Optional[str] = None      # 发布时间（标准格式 YYYY-MM-DD HH:MM）
-    project_code: Optional[str] = None          # 项目编号
-
-    # 采购方信息（标准化）
-    purchaser_name: Optional[str] = None        # 采购方名称
-    purchaser_address_std: Optional[str] = None # 采购方地址
-    purchaser_contact_person: Optional[str] = None  # 采购方联系人
-    purchaser_contact_phone: Optional[str] = None   # 采购方联系方式
-
-    # 代理机构信息（标准化）
-    agency_name_std: Optional[str] = None       # 代理机构名称
-    agency_address_std: Optional[str] = None    # 代理机构地址
-    agency_contact_phone: Optional[str] = None  # 代理机构联系方式
-
-    # 项目联系信息（标准化）
-    project_contact_person: Optional[str] = None    # 项目联系人
-    project_contact_phone: Optional[str] = None     # 项目联系方式
-
-    # 金额（整数分）
-    budget_amount_fen: Optional[int] = None     # 采购预算金额（精确到分，整数形式）
-
-    # 采购文件获取时间（拆分）
-    bid_doc_start_time: Optional[str] = None    # 采购文件获取开始时间
-    bid_doc_end_time: Optional[str] = None      # 采购文件获取截止时间
-
-    # 投标相关
-    response_deadline: Optional[str] = None     # 响应文件提交截止时间
-    bid_start_time: Optional[str] = None        # 投标开始时间
-    bid_location_std: Optional[str] = None      # 投标地点
-
-    # 元数据
-    crawled_at: str = field(default_factory=lambda: datetime.now().isoformat())
-    source: str = "中国政府采购网"             # 数据来源
-    list_page: str = ""                       # 来源列表页
 
     def to_dict(self) -> dict:
         """转换为字典."""
