@@ -40,7 +40,7 @@ def main():
     engine = MatchEngine()
 
     if args.supplier > 0:
-        supplier = SupplierProfileDao.instance().get_by_id(args.supplier)
+        supplier = SupplierProfileDao().get_by_id(args.supplier)
         if not supplier:
             logger.error(f"供应商 {args.supplier} 不存在")
             sys.exit(1)

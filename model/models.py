@@ -1,315 +1,391 @@
-"""数据模型定义.
+"""SQLAlchemy 2.0 数据模型定义.
 
-所有模型类与 bid_database.sql 中的表一一对应.
+所有模型类与 bid_database.sql 中的表一一对应，同时保持与原有 dataclass 接口兼容。
 """
-from dataclasses import dataclass, field, asdict
-from datetime import datetime
 import json
-from typing import Optional
+from datetime import datetime
+from decimal import Decimal
+from typing import List, Optional
+
+from sqlalchemy import (
+    BigInteger,
+    DECIMAL,
+    DateTime,
+    ForeignKey,
+    Index,
+    JSON,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
+from sqlalchemy.dialects.mysql import TINYINT
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+
+# ---------------------------------------------------------------------------
+# 默认时间常量（与数据库默认值保持一致）
+# ---------------------------------------------------------------------------
+_DEFAULT_DATETIME = datetime(1970, 1, 1, 0, 0, 0)
+
+
+# ---------------------------------------------------------------------------
+# 声明式基类
+# ---------------------------------------------------------------------------
+class Base(DeclarativeBase):
+    pass
 
 
 # ---------------------------------------------------------------------------
 # 招标公告主表
 # ---------------------------------------------------------------------------
+class ProcurementNotice(Base):
+    __tablename__ = "procurement_notices"
 
-@dataclass
-class ProcurementNotice:
-    """招标公告数据模型，字段与 procurement_notices 表一一对应."""
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.attachments = []
+    __table_args__ = (
+        UniqueConstraint("url", name="uk_url"),
+        Index("idx_notice_date", "notice_date"),
+        Index("idx_bid_deadline", "bid_deadline"),
+        Index("idx_region", "region_province", "region_city", "region_district"),
+        Index("idx_budget", "budget"),
+        Index("idx_method", "method"),
+        Index("idx_category", "category_code"),
+        Index("idx_status", "status"),
+        Index("ft_project_name", "project_name", mysql_prefix="FULLTEXT"),
+        Index("ft_abstract", "abstract", mysql_prefix="FULLTEXT"),
+    )
 
-    # === 数据库主键 ===
-    id: int = 0  # 数据库自增ID
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
 
     # === 来源信息 ===
-    platform: str = ""  # 平台：中国政府采购网
-    part: str = ""  # 爬取栏目：中央公告/地方公告
-    title: str = ""  # 列表页原始标题
+    platform: Mapped[str] = mapped_column(String(64), default="")
+    part: Mapped[str] = mapped_column(String(32), default="")
+    title: Mapped[str] = mapped_column(String(256), default="")
+    notice_type: Mapped[str] = mapped_column(String(32), default="")
 
     # === 核心信息 ===
-    notice_type: str = ""  # 公告类型
-    url: str = ""  # 来源URL
+    url: Mapped[str] = mapped_column(String(256), default="")
 
     # === 地区 ===
-    region_province: str = ""  # 省/自治区/直辖市
-    region_city: str = ""  # 市/直辖市辖区
-    region_district: str = ""  # 区/县
+    region_province: Mapped[str] = mapped_column(String(32), default="")
+    region_city: Mapped[str] = mapped_column(String(32), default="")
+    region_district: Mapped[str] = mapped_column(String(32), default="")
 
     # === 项目信息 ===
-    project_name: str = ""  # 项目名称
-    project_no: str = ""  # 项目编号
-    purchase_plan_no: str = ""  # 采购计划编号
+    project_name: Mapped[str] = mapped_column(String(256), default="")
+    project_no: Mapped[str] = mapped_column(String(128), default="")
+    purchase_plan_no: Mapped[str] = mapped_column(String(128), default="")
 
-    # === 金额（原始字符串，入库时由 db_storage 转换为 Decimal） ===
-    budget: str = ""  # 预算金额
-    max_limit: str = ""  # 最高限价
-    currency: str = "CNY"  # 币种
+    # === 金额 ===
+    budget: Mapped[Decimal] = mapped_column(DECIMAL(15, 2), default=Decimal("0.00"))
+    max_limit: Mapped[Decimal] = mapped_column(DECIMAL(15, 2), default=Decimal("0.00"))
+    currency: Mapped[str] = mapped_column(String(8), default="CNY")
 
     # === 品目 ===
-    category_code: str = ""  # 采购品目编码
-    category_name: str = ""  # 采购品目名称
-    category_embedding: list = field(default_factory=list)  # 所需服务的Embedding向量
+    category_code: Mapped[str] = mapped_column(String(32), default="")
+    category_name: Mapped[str] = mapped_column(String(128), default="")
+    category_embedding: Mapped[Optional[list]] = mapped_column(JSON, default=list)
 
     # === 采购方式 ===
-    method: str = ""  # 公开招标/竞争性谈判/询价/单一来源
-    joint_bid_allowed: int = 0  # 是否接受联合体
-    joint_bid_max_members: int = 0  # 联合体最多成员数
-    sme_oriented: int = 0  # 是否面向中小企业
+    method: Mapped[str] = mapped_column(String(32), default="")
+    joint_bid_allowed: Mapped[int] = mapped_column(TINYINT, default=0)
+    joint_bid_max_members: Mapped[int] = mapped_column(BigInteger, default=0)
+    sme_oriented: Mapped[int] = mapped_column(TINYINT, default=0)
 
-    # === 时间节点（原始字符串，入库时由 db_storage 转换为 datetime） ===
-    notice_date: str = ""  # 公告发布日期
-    doc_obtain_start: str = ""  # 文件获取开始
-    doc_obtain_end: str = ""  # 文件获取截止
-    bid_deadline: str = ""  # 投标截止
-    bid_open_time: str = ""  # 开标时间
+    # === 时间节点 ===
+    notice_date: Mapped[datetime] = mapped_column(DateTime, default=_DEFAULT_DATETIME)
+    doc_obtain_start: Mapped[datetime] = mapped_column(DateTime, default=_DEFAULT_DATETIME)
+    doc_obtain_end: Mapped[datetime] = mapped_column(DateTime, default=_DEFAULT_DATETIME)
+    bid_deadline: Mapped[datetime] = mapped_column(DateTime, default=_DEFAULT_DATETIME)
+    bid_open_time: Mapped[datetime] = mapped_column(DateTime, default=_DEFAULT_DATETIME)
 
     # === 投标方式 ===
-    bid_platform: str = ""  # 投标平台
-    bid_platform_url: str = ""  # 投标平台URL
-    ca_required: int = 0  # 是否需要CA证书
-    doc_price: str = ""  # 标书费用
+    bid_platform: Mapped[str] = mapped_column(String(128), default="")
+    bid_platform_url: Mapped[str] = mapped_column(String(256), default="")
+    ca_required: Mapped[int] = mapped_column(TINYINT, default=0)
+    doc_price: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), default=Decimal("0.00"))
 
-    # === 采购方（采购人）信息 ===
-    purchaser_name: str = ""  # 采购人名称
-    purchaser_address: str = ""  # 采购人地址
-    purchaser_contact_person: str = ""  # 采购人联系人
-    purchaser_contact_phone: str = ""  # 采购人联系电话
-    purchaser_region: str = ""  # 采购人地区
+    # === 采购方信息 ===
+    purchaser_name: Mapped[str] = mapped_column(String(128), default="")
+    purchaser_address: Mapped[str] = mapped_column(String(256), default="")
+    purchaser_contact_person: Mapped[str] = mapped_column(String(64), default="")
+    purchaser_contact_phone: Mapped[str] = mapped_column(String(32), default="")
+    purchaser_region: Mapped[str] = mapped_column(String(64), default="")
 
     # === 代理机构信息 ===
-    agency_name: str = ""  # 代理机构名称
-    agency_address: str = ""  # 代理机构地址
-    agency_contact_person: str = ""  # 代理机构联系人
-    agency_contact_phone: str = ""  # 代理机构联系电话
-    agency_region: str = ""  # 代理机构地区
+    agency_name: Mapped[str] = mapped_column(String(128), default="")
+    agency_address: Mapped[str] = mapped_column(String(256), default="")
+    agency_contact_person: Mapped[str] = mapped_column(String(64), default="")
+    agency_contact_phone: Mapped[str] = mapped_column(String(32), default="")
+    agency_region: Mapped[str] = mapped_column(String(64), default="")
 
-    # === 项目联系人信息 ===
-    project_contact_person: str = ""  # 项目联系人
-    project_contact_phone: str = ""  # 项目联系方式
+    # === 项目联系人 ===
+    project_contact_person: Mapped[str] = mapped_column(String(64), default="")
+    project_contact_phone: Mapped[str] = mapped_column(String(32), default="")
 
     # === 匹配特征 ===
-    qualification_summary: str = ""  # 资质要求摘要
-    industry_tags: list = field(default_factory=list)  # 行业标签
-    keywords: list = field(default_factory=list)  # 关键词
-    suggested_company_types: list = field(default_factory=list)  # 建议供应商类型
-    geographic_advantage: str = ""  # 地域优势
+    qualification_summary: Mapped[Optional[str]] = mapped_column(Text)
+    industry_tags: Mapped[Optional[list]] = mapped_column(JSON, default=list)
+    keywords: Mapped[Optional[list]] = mapped_column(JSON, default=list)
+    suggested_company_types: Mapped[Optional[list]] = mapped_column(JSON, default=list)
+    geographic_advantage: Mapped[str] = mapped_column(String(32), default="")
 
     # === 原始摘要 ===
-    abstract: str = ""  # 原文摘要（包含关键词，此字段用于全文检索）
-    html: str = ""  # 详情页原始HTML
-    parse_time: str = ""  # 解析时间
+    abstract: Mapped[Optional[str]] = mapped_column(Text)
+    html: Mapped[Optional[str]] = mapped_column(Text)
+    parse_time: Mapped[datetime] = mapped_column(DateTime, default=_DEFAULT_DATETIME)
 
-    # === 状态（爬取流程状态） ===
-    status: int = 1  # 1:获取概要信息 20:获取了网页内容 30:解析出了公告内容
-    created_at: str = field(default_factory=lambda: datetime.now().isoformat())
-    updated_at: str = ""
+    # === 状态 ===
+    status: Mapped[int] = mapped_column(TINYINT, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.now, onupdate=datetime.now
+    )
 
-    # ---------------------------------------------------------
-    # 以下为爬虫辅助字段（非数据库字段，用于解析中间状态/溯源）
-    # ---------------------------------------------------------
-    attachments: list = field(default_factory=list)  # 附件列表
+    # === Relationships ===
+    attachments_rel: Mapped[List["NoticeAttachment"]] = relationship(
+        back_populates="notice", cascade="all, delete-orphan", lazy="selectin"
+    )
+    packages_rel: Mapped[List["NoticePackage"]] = relationship(
+        back_populates="notice", cascade="all, delete-orphan", lazy="selectin"
+    )
+    qualifications_rel: Mapped[List["NoticeQualification"]] = relationship(
+        back_populates="notice", cascade="all, delete-orphan", lazy="selectin"
+    )
 
     def to_dict(self) -> dict:
-        """转换为字典."""
-        return asdict(self)
+        """转换为字典（不包含 relationship，避免循环引用）."""
+        result = {}
+        for col in self.__table__.columns:
+            val = getattr(self, col.name)
+            # 保持与原有 dataclass asdict 行为一致：Decimal 保持原样，datetime 保持原样
+            result[col.name] = val
+        # 兼容原有爬虫辅助字段
+        result["attachments"] = getattr(self, "attachments", [])
+        return result
 
     def to_json(self, ensure_ascii: bool = False, indent: int = 2) -> str:
-        """转换为JSON字符串."""
-        return json.dumps(self.to_dict(), ensure_ascii=ensure_ascii, indent=indent)
+        """转换为 JSON 字符串."""
+        return json.dumps(self.to_dict(), ensure_ascii=ensure_ascii, indent=indent, default=str)
 
 
 # ---------------------------------------------------------------------------
 # 公告资质要求表
 # ---------------------------------------------------------------------------
+class NoticeQualification(Base):
+    __tablename__ = "notice_qualifications"
+    __table_args__ = (
+        Index("idx_notice_qual", "notice_id", "qualification_type"),
+        Index("idx_qual_name", "name"),
+    )
 
-@dataclass
-class NoticeQualification:
-    """招标公告资质要求明细，对应 notice_qualifications 表."""
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    notice_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("procurement_notices.id"), default=0)
+    qualification_type: Mapped[str] = mapped_column(String(32), default="")
+    name: Mapped[str] = mapped_column(String(128), default="")
+    required_scope: Mapped[str] = mapped_column(String(256), default="")
+    valid_required: Mapped[int] = mapped_column(TINYINT, default=1)
+    evidence_type: Mapped[str] = mapped_column(String(64), default="")
+    joint_bid_acceptable: Mapped[int] = mapped_column(TINYINT, default=0)
+    sort_order: Mapped[int] = mapped_column(BigInteger, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now)
 
-    id: int = 0
-    notice_id: int = 0  # 关联公告ID
-    qualification_type: str = ""  # 资质类型：资质许可/业绩要求/人员要求/设备要求/其他
-    name: str = ""  # 资质名称
-    required_scope: str = ""  # 要求范围/等级
-    valid_required: int = 1  # 是否要求有效期内
-    evidence_type: str = ""  # 证明材料类型
-    joint_bid_acceptable: int = 0  # 联合体是否可接受
-    sort_order: int = 0  # 排序
-    created_at: str = field(default_factory=lambda: datetime.now().isoformat())
-    updated_at: str = ""
+    notice: Mapped["ProcurementNotice"] = relationship(back_populates="qualifications_rel")
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        return {c.name: getattr(self, c.name) for c in self.__table__.columns}
 
     def to_json(self, ensure_ascii: bool = False, indent: int = 2) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=ensure_ascii, indent=indent)
+        return json.dumps(self.to_dict(), ensure_ascii=ensure_ascii, indent=indent, default=str)
 
 
 # ---------------------------------------------------------------------------
 # 公告附件表
 # ---------------------------------------------------------------------------
+class NoticeAttachment(Base):
+    __tablename__ = "notice_attachments"
+    __table_args__ = (Index("idx_notice_id", "notice_id"),)
 
-@dataclass
-class NoticeAttachment:
-    """招标公告附件，对应 notice_attachments 表."""
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    notice_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("procurement_notices.id"), default=0)
+    name: Mapped[str] = mapped_column(String(256), default="")
+    url: Mapped[str] = mapped_column(String(512), default="")
+    object_key: Mapped[str] = mapped_column(String(256), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now)
 
-    id: int = 0
-    notice_id: int = 0  # 关联公告ID
-    name: str = ""  # 附件名称
-    url: str = ""  # 原始下载链接
-    object_key: str = ""  # 对象存储Key
-    created_at: str = field(default_factory=lambda: datetime.now().isoformat())
-    updated_at: str = ""
+    notice: Mapped["ProcurementNotice"] = relationship(back_populates="attachments_rel")
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        return {c.name: getattr(self, c.name) for c in self.__table__.columns}
 
     def to_json(self, ensure_ascii: bool = False, indent: int = 2) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=ensure_ascii, indent=indent)
+        return json.dumps(self.to_dict(), ensure_ascii=ensure_ascii, indent=indent, default=str)
 
 
 # ---------------------------------------------------------------------------
 # 公告分包表
 # ---------------------------------------------------------------------------
+class NoticePackage(Base):
+    __tablename__ = "notice_packages"
+    __table_args__ = (Index("idx_notice_pkg", "notice_id"),)
 
-@dataclass
-class NoticePackage:
-    """招标公告分包信息，对应 notice_packages 表."""
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    notice_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("procurement_notices.id"), default=0)
+    no: Mapped[str] = mapped_column(String(16), default="")
+    name: Mapped[str] = mapped_column(String(256), default="")
+    budget: Mapped[Decimal] = mapped_column(DECIMAL(15, 2), default=Decimal("0.00"))
+    max_limit: Mapped[Decimal] = mapped_column(DECIMAL(15, 2), default=Decimal("0.00"))
+    quantity: Mapped[Decimal] = mapped_column(DECIMAL(15, 4), default=Decimal("0.0000"))
+    unit: Mapped[str] = mapped_column(String(32), default="")
 
-    id: int = 0
-    notice_id: int = 0  # 关联公告ID
-    no: str = ""  # 包号
-    name: str = ""  # 包名称
-    budget: str = ""  # 包预算
-    max_limit: str = ""  # 包最高限价
-    quantity: str = ""  # 数量
-    unit: str = ""  # 单位
-    created_at: str = field(default_factory=lambda: datetime.now().isoformat())
-    updated_at: str = ""
+    notice: Mapped["ProcurementNotice"] = relationship(back_populates="packages_rel")
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        return {c.name: getattr(self, c.name) for c in self.__table__.columns}
 
     def to_json(self, ensure_ascii: bool = False, indent: int = 2) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=ensure_ascii, indent=indent)
+        return json.dumps(self.to_dict(), ensure_ascii=ensure_ascii, indent=indent, default=str)
 
 
 # ---------------------------------------------------------------------------
 # 供应商画像表
 # ---------------------------------------------------------------------------
+class SupplierProfile(Base):
+    __tablename__ = "supplier_profiles"
+    __table_args__ = (
+        Index("idx_region", "province", "city"),
+        Index("ft_business_scope", "business_scope", mysql_prefix="FULLTEXT"),
+        Index("ft_qualification_summary", "qualification_summary", mysql_prefix="FULLTEXT"),
+    )
 
-@dataclass
-class SupplierProfile:
-    """供应商画像，对应 supplier_profiles 表."""
-
-    id: int = 0
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
 
     # === 公司基本信息 ===
-    company_name: str = ""  # 公司名称
-    company_scale: str = ""  # 企业规模：微型/小型/中型/大型
-    province: str = ""  # 公司所在省
-    city: str = ""  # 公司所在市
-    district: str = ""  # 公司所在区
+    company_name: Mapped[str] = mapped_column(String(128), default="")
+    company_scale: Mapped[str] = mapped_column(String(32), default="")
+    province: Mapped[str] = mapped_column(String(32), default="")
+    city: Mapped[str] = mapped_column(String(32), default="")
+    district: Mapped[str] = mapped_column(String(32), default="")
 
-    # === 身份标签（用于公告→供应商的硬过滤） ===
-    sme_status: int = 0  # 是否中小企业：0否 1是
-    ca_ready: int = 0  # 是否已有CA证书：0否 1是
+    # === 身份标签 ===
+    sme_status: Mapped[int] = mapped_column(TINYINT, default=0)
+    ca_ready: Mapped[int] = mapped_column(TINYINT, default=0)
 
     # === 业务范围 ===
-    business_scope: str = ""  # 业务范围关键词，逗号分隔
-    business_embedding: list = field(default_factory=list)  # 业务范围语义Embedding向量
+    business_scope: Mapped[Optional[str]] = mapped_column(Text)
+    business_embedding: Mapped[Optional[list]] = mapped_column(JSON, default=list)
 
     # === 资质证书 ===
-    qualifications: list = field(default_factory=list)  # 资质证书列表 [{name, cert_no, valid_until}]
-    qualification_summary: str = ""  # 资质摘要，用于快速匹配
+    qualifications: Mapped[Optional[list]] = mapped_column(JSON, default=list)
+    qualification_summary: Mapped[str] = mapped_column(String(512), default="")
 
     # === 需求偏好 ===
-    min_budget: str = ""  # 最低预算偏好（0表示不限）
-    max_budget: str = "999999999.99"  # 最高预算偏好
-    preferred_methods: str = ""  # 偏好采购方式，逗号分隔
+    min_budget: Mapped[Decimal] = mapped_column(DECIMAL(15, 2), default=Decimal("0.00"))
+    max_budget: Mapped[Decimal] = mapped_column(DECIMAL(15, 2), default=Decimal("999999999.99"))
+    preferred_methods: Mapped[str] = mapped_column(String(128), default="")
 
     # === 联合体 ===
-    joint_bid_willing: int = 0  # 是否愿意联合体投标
+    joint_bid_willing: Mapped[int] = mapped_column(TINYINT, default=0)
 
     # === 排除项 ===
-    excluded_keywords: str = ""  # 排除关键词，逗号分隔
+    excluded_keywords: Mapped[str] = mapped_column(String(256), default="")
 
-    created_at: str = field(default_factory=lambda: datetime.now().isoformat())
-    updated_at: str = ""
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now)
 
-    def to_dict(self) -> dict:
-        return asdict(self)
-
-    def to_json(self, ensure_ascii: bool = False, indent: int = 2) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=ensure_ascii, indent=indent)
-
-
-@dataclass
-class SupplierServiceRegion:
-    """供应商服务省份，，对应 supplier_service_regions 表"""
-    id: int = 0
-
-    supplier_id: int = 0  # 供应商ID（对应supplier_profiles.id）
-    province: str = ""  # 供应商服务的省份
-    created_at: str = field(default_factory=lambda: datetime.now().isoformat())
+    # === Relationships ===
+    service_regions_rel: Mapped[List["SupplierServiceRegion"]] = relationship(
+        back_populates="supplier", cascade="all, delete-orphan", lazy="selectin"
+    )
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        return {c.name: getattr(self, c.name) for c in self.__table__.columns}
 
     def to_json(self, ensure_ascii: bool = False, indent: int = 2) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=ensure_ascii, indent=indent)
+        return json.dumps(self.to_dict(), ensure_ascii=ensure_ascii, indent=indent, default=str)
+
+
+# ---------------------------------------------------------------------------
+# 供应商可服务地区表
+# ---------------------------------------------------------------------------
+class SupplierServiceRegion(Base):
+    __tablename__ = "supplier_service_regions"
+    __table_args__ = (
+        Index("idx_supplier_id", "supplier_id"),
+        Index("idx_region_name", "region_name"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    supplier_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("supplier_profiles.id"), default=0)
+    region_name: Mapped[str] = mapped_column(String(32), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+    supplier: Mapped["SupplierProfile"] = relationship(back_populates="service_regions_rel")
+
+    def to_dict(self) -> dict:
+        return {c.name: getattr(self, c.name) for c in self.__table__.columns}
+
+    def to_json(self, ensure_ascii: bool = False, indent: int = 2) -> str:
+        return json.dumps(self.to_dict(), ensure_ascii=ensure_ascii, indent=indent, default=str)
 
 
 # ---------------------------------------------------------------------------
 # 匹配结果表
 # ---------------------------------------------------------------------------
+class MatchResult(Base):
+    __tablename__ = "match_results"
+    __table_args__ = (
+        UniqueConstraint("supplier_id", "notice_id", name="uk_supplier_notice"),
+        Index("idx_supplier_id", "supplier_id"),
+        Index("idx_notice_id", "notice_id"),
+        Index("idx_ai_level", "ai_match_level"),
+        Index("idx_final_score", "final_score"),
+        Index("idx_created_at", "created_at"),
+    )
 
-@dataclass
-class MatchResult:
-    """供应商-招标公告匹配结果，对应 match_results 表."""
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
 
-    id: int = 0
+    supplier_id: Mapped[int] = mapped_column(BigInteger, default=0)
+    notice_id: Mapped[int] = mapped_column(BigInteger, default=0)
 
-    # === 关联信息 ===
-    supplier_id: int = 0  # 供应商ID（对应 supplier_profiles.id）
-    notice_id: int = 0  # 公告ID（对应 procurement_notices.id）
+    ai_match_score: Mapped[Decimal] = mapped_column(DECIMAL(5, 2), default=Decimal("0.00"))
+    ai_match_level: Mapped[str] = mapped_column(String(16), default="")
+    ai_match_reasons: Mapped[Optional[str]] = mapped_column(Text)
+    ai_risk_tips: Mapped[Optional[str]] = mapped_column(Text)
+    ai_key_matching_points: Mapped[Optional[str]] = mapped_column(Text)
+    ai_mismatch_points: Mapped[Optional[str]] = mapped_column(Text)
+    ai_recommendation: Mapped[str] = mapped_column(String(64), default="")
+    ai_raw_response: Mapped[Optional[str]] = mapped_column(Text)
+    ai_call_time: Mapped[datetime] = mapped_column(DateTime, default=_DEFAULT_DATETIME)
 
-    # === AI 精筛结果 ===
-    ai_match_score: str = ""  # AI匹配分数（0-100）
-    ai_match_level: str = ""  # AI匹配等级：高(>=80)/中(60-79)/低(<60)/不匹配
-    ai_match_reasons: str = ""  # AI给出的匹配理由
-    ai_risk_tips: str = ""  # AI给出的风险提示
-    ai_key_matching_points: str = ""  # AI提取的关键匹配点
-    ai_mismatch_points: str = ""  # AI提取的不匹配点
-    ai_recommendation: str = ""  # AI建议：强烈推荐/推荐/谨慎考虑/不推荐
-    ai_raw_response: str = ""  # AI原始返回内容（用于调试和追溯）
-    ai_call_time: str = ""  # AI调用时间
+    final_score: Mapped[Decimal] = mapped_column(DECIMAL(5, 2), default=Decimal("0.00"))
+    final_rank: Mapped[int] = mapped_column(BigInteger, default=0)
+    is_top3: Mapped[int] = mapped_column(TINYINT, default=0)
 
-    # === 最终排序与输出 ===
-    final_score: str = ""  # 最终排序分数
-    final_rank: int = 0  # 该供应商所有匹配中的排名
-    is_top3: int = 0  # 是否进入Top3推荐
+    push_status: Mapped[int] = mapped_column(TINYINT, default=0)
+    push_time: Mapped[datetime] = mapped_column(DateTime, default=_DEFAULT_DATETIME)
+    push_channel: Mapped[str] = mapped_column(String(32), default="")
+    push_message_id: Mapped[str] = mapped_column(String(128), default="")
 
-    # === 推送状态 ===
-    push_status: int = 0  # 0未推送 1已推送 2推送失败 3用户已读 4用户忽略
-    push_time: str = ""  # 推送时间
-    push_channel: str = ""  # 推送渠道
-    push_message_id: str = ""  # 企业微信消息ID
+    user_feedback_score: Mapped[int] = mapped_column(TINYINT, default=0)
+    user_feedback_comment: Mapped[str] = mapped_column(String(512), default="")
+    user_viewed: Mapped[int] = mapped_column(TINYINT, default=0)
+    user_favorite: Mapped[int] = mapped_column(TINYINT, default=0)
+    user_applied: Mapped[int] = mapped_column(TINYINT, default=0)
+    user_feedback_time: Mapped[datetime] = mapped_column(DateTime, default=_DEFAULT_DATETIME)
 
-    # === 用户反馈 ===
-    user_feedback_score: int = 0  # 用户反馈评分：0未反馈 1-5星
-    user_feedback_comment: str = ""  # 用户反馈文字
-    user_viewed: int = 0  # 用户是否点击查看详情
-    user_favorite: int = 0  # 用户是否收藏
-    user_applied: int = 0  # 用户是否实际投标
-    user_feedback_time: str = ""  # 用户反馈时间
+    status: Mapped[int] = mapped_column(TINYINT, default=1)
 
-    # === 状态 ===
-    status: int = 1  # 1有效 2已过期 3已删除
-
-    created_at: str = field(default_factory=lambda: datetime.now().isoformat())
-    updated_at: str = ""
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now)
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        return {c.name: getattr(self, c.name) for c in self.__table__.columns}
 
     def to_json(self, ensure_ascii: bool = False, indent: int = 2) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=ensure_ascii, indent=indent)
+        return json.dumps(self.to_dict(), ensure_ascii=ensure_ascii, indent=indent, default=str)

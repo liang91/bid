@@ -1,21 +1,24 @@
-"""DAO 基类与公共工具函数."""
+"""DAO 基类与 SQLAlchemy 会话管理.
 
-import json
+保留原有辅助转换函数，替换 pymysql 为 SQLAlchemy 2.0 engine + Session。
+"""
 import logging
 import re
 from contextlib import contextmanager
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
-from typing import Optional
+from typing import Generator, Optional
 
-import pymysql
-from pymysql.cursors import DictCursor
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session, sessionmaker
 
 from config import load_config
 
 logger = logging.getLogger(__name__)
 
-# 加载配置（模块级缓存）
+# ---------------------------------------------------------------------------
+# 配置加载（模块级缓存）
+# ---------------------------------------------------------------------------
 _cfg = None
 
 
@@ -30,52 +33,65 @@ def get_db_config():
     return _cfg
 
 
-class BaseStorage:
-    """数据库存储基类，接收已初始化好的连接参数，提供通用游标上下文管理器."""
+# ---------------------------------------------------------------------------
+# SQLAlchemy Engine & Session 工厂（由 dao/__init__.py 在包导入时初始化一次）
+# ---------------------------------------------------------------------------
+_engine = None
+_SessionLocal = None
 
-    _instances = {}
 
-    def __init__(self, conn_params: dict):
-        self.conn_params = conn_params
+def init_engine():
+    """初始化 SQLAlchemy engine 和 session 工厂（幂等，只执行一次）."""
+    global _engine, _SessionLocal
+    if _engine is not None:
+        return
 
-    @classmethod
-    def instance(cls, conn_params=None):
-        """获取单例实例；首次调用时自动使用默认配置初始化."""
-        if cls not in BaseStorage._instances:
-            if conn_params is None:
-                from dao import _CONN_PARAMS
-                conn_params = _CONN_PARAMS
-            BaseStorage._instances[cls] = cls(conn_params)
-        return BaseStorage._instances[cls]
+    cfg = get_db_config()
+    db_url = (
+        "mysql+pymysql://{user}:{password}@{host}:{port}/{database}"
+        "?charset={charset}".format(
+            user=cfg.get("mysql.user"),
+            password=cfg.get("mysql.password"),
+            host=cfg.get("mysql.host"),
+            port=cfg.get("mysql.port"),
+            database=cfg.get("mysql.database"),
+            charset=cfg.get("mysql.charset"),
+        )
+    )
 
-    @contextmanager
-    def _get_cursor(self):
-        """获取数据库游标的上下文管理器."""
-        conn = pymysql.connect(**self.conn_params)
-        try:
-            cursor = conn.cursor()
-            yield cursor
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
+    _engine = create_engine(
+        db_url,
+        pool_size=10,
+        max_overflow=20,
+        pool_pre_ping=True,
+        pool_recycle=3600,
+        echo=False,
+    )
+    _SessionLocal = sessionmaker(bind=_engine, expire_on_commit=False)
+    logger.info("[SQLAlchemy] Engine 初始化完成")
 
-    @staticmethod
-    def _quote_field(name: str) -> str:
-        """给 SQL 字段名加反引号，避免与保留关键字冲突."""
-        return f"`{name}`"
 
-    def execute(self, sql: str, params: Optional[tuple] = None):
-        """执行原始 SQL（用于查询或维护）."""
-        with self._get_cursor() as cursor:
-            cursor.execute(sql, params or ())
-            return cursor.fetchall()
+@contextmanager
+def session_scope() -> Generator[Session, None, None]:
+    """提供事务性 Session 的上下文管理器.
+
+    用法:
+        with session_scope() as session:
+            session.add(obj)
+    """
+    session = _SessionLocal()
+    try:
+        yield session
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
 
 
 # ---------------------------------------------------------------------------
-# 辅助转换函数
+# 辅助转换函数（保留）
 # ---------------------------------------------------------------------------
 
 
@@ -129,7 +145,6 @@ def _parse_crawled_at(crawled) -> datetime:
 # ---------------------------------------------------------------------------
 # 金额解析辅助函数
 # ---------------------------------------------------------------------------
-
 _AMOUNT_PATTERNS = [
     re.compile(r"[￥¥]?\s*([\d,.]+)\s*万\s*元"),
     re.compile(r"[￥¥]?\s*([\d,.]+)\s*元"),
@@ -174,7 +189,6 @@ def parse_amount(text: Optional[str]) -> Optional[Decimal]:
 # ---------------------------------------------------------------------------
 # 时间解析辅助函数
 # ---------------------------------------------------------------------------
-
 _DT_PATTERNS = [
     (re.compile(r"(\d{4})年(\d{1,2})月(\d{1,2})日\s+(\d{1,2}):(\d{2})"), "%Y-%m-%d %H:%M"),
     (re.compile(r"(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})"), "%Y-%m-%d %H:%M"),

@@ -39,3 +39,5 @@
 我把procurement_notices表里的content_embedding字段重命名成了category_embedding，请你修改数据模型和代码。
 
 这个项目提供投标数据服务的，涉及大量数据库操作、也涉及大量表和数据模型，目前使用的pymysql组件，是否简洁易用呢？
+既然对MySQL的操作已经迁移到SQLAlchemy 2.0，我认为只需在dao/__init__.py里初始化好engine，之后在各个Dao类里引用engine即可，就不需要BaseStorage了，不需要所谓的单例模式。
+不知道我的想法是否正确，如果正确，请对代码进行调整。

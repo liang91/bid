@@ -1,18 +1,19 @@
-"""notice_attachments 表的数据访问对象."""
+"""notice_attachments 表的数据访问对象（SQLAlchemy 2.0）."""
 
 import logging
 from typing import List
 
-from .base import BaseStorage
+from sqlalchemy import delete
+
+from model import NoticeAttachment
+
+from .base import session_scope
 
 logger = logging.getLogger(__name__)
 
 
-class NoticeAttachmentDao(BaseStorage):
+class NoticeAttachmentDao:
     """公告附件表存储器."""
-
-    def __init__(self, conn_params: dict):
-        super().__init__(conn_params)
 
     def insert(self, notice_id: int, attachments: List[dict]) -> int:
         """插入公告附件，先删除旧记录再批量插入.
@@ -27,27 +28,25 @@ class NoticeAttachmentDao(BaseStorage):
         if not attachments:
             return 0
 
-        sql_delete = "DELETE FROM notice_attachments WHERE notice_id = %s"
-
-        fields = ["notice_id", "name", "url"]
-        columns = ", ".join([self._quote_field(f) for f in fields])
-        placeholders = ", ".join([f"%({f})s" for f in fields])
-        sql_insert = f"INSERT INTO notice_attachments ({columns}) VALUES ({placeholders})"
-
-        params = []
+        records = []
         for item in attachments:
             if not isinstance(item, dict):
                 continue
-            params.append({
-                "notice_id": notice_id,
-                "name": str(item.get("name") or "")[:256],
-                "url": str(item.get("url") or "")[:512],
-            })
+            records.append(
+                NoticeAttachment(
+                    notice_id=notice_id,
+                    name=str(item.get("name") or "")[:256],
+                    url=str(item.get("url") or "")[:512],
+                )
+            )
 
-        if not params:
+        if not records:
             return 0
 
-        with self._get_cursor() as cursor:
-            cursor.execute(sql_delete, (notice_id,))
-            cursor.executemany(sql_insert, params)
-            return cursor.rowcount
+        with session_scope() as session:
+            session.execute(
+                delete(NoticeAttachment).where(NoticeAttachment.notice_id == notice_id)
+            )
+            session.add_all(records)
+            session.commit()
+            return len(records)

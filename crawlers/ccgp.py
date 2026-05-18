@@ -422,7 +422,7 @@ class CCGPCrawler:
 
         # 存入数据库（INSERT IGNORE，跳过已存在的 URL）
         if tender_notices:
-            stats = ProcurementNoticeDao.instance().insert_list(tender_notices)
+            stats = ProcurementNoticeDao().insert_list(tender_notices)
             logger.info(
                 f"[fetch_list] 入库完成: 新增 {stats['inserted']} 条, "
                 f"跳过已存在 {stats['skipped']} 条"
@@ -449,7 +449,7 @@ class CCGPCrawler:
         Returns:
             {"total": int, "success": int, "failed": int}
         """
-        notices = ProcurementNoticeDao.instance().fetch_by_status(status=1, platform=self.PLATFORM, limit=limit)
+        notices = ProcurementNoticeDao().fetch_by_status(status=1, platform=self.PLATFORM, limit=limit)
         if not notices:
             logger.info("[fetch_html] 没有待获取 HTML 的记录")
             return {"total": 0, "success": 0, "failed": 0}
@@ -463,7 +463,7 @@ class CCGPCrawler:
             if html:
                 # 去掉 head/foot/css/js 等噪声标签，保留正文 HTML 结构
                 filtered_html = strip_html_noise(html)
-                ok = ProcurementNoticeDao.instance().update_html(notice.id, filtered_html)
+                ok = ProcurementNoticeDao().update_html(notice.id, filtered_html)
                 if ok:
                     success += 1
                     logger.info(f"[fetch_html] {idx}/{len(notices)} 成功: {notice.project_name[:40]}...")
@@ -490,7 +490,7 @@ class CCGPCrawler:
         Returns:
             {"total": int, "success": int, "failed": int}
         """
-        notices = ProcurementNoticeDao.instance().fetch_by_status(status=20, platform=self.PLATFORM, limit=limit)
+        notices = ProcurementNoticeDao().fetch_by_status(status=20, platform=self.PLATFORM, limit=limit)
         if not notices:
             logger.info("[parse_detail] 没有待解析的记录")
             return {"total": 0, "success": 0, "failed": 0}
@@ -524,18 +524,18 @@ class CCGPCrawler:
                 self._enrich_notice(notice)
 
                 notice.status = 30
-                ok = ProcurementNoticeDao.instance().update_parsed(notice)
+                ok = ProcurementNoticeDao().update_parsed(notice)
                 if ok:
                     # 主表更新成功后再插入子表数据
-                    NoticeAttachmentDao.instance().insert(notice.id, sub_attachments)
-                    NoticePackageDao.instance().insert(notice.id, sub_packages)
-                    NoticeQualificationDao.instance().insert(notice.id, sub_qualifications)
+                    NoticeAttachmentDao().insert(notice.id, sub_attachments)
+                    NoticePackageDao().insert(notice.id, sub_packages)
+                    NoticeQualificationDao().insert(notice.id, sub_qualifications)
 
                     # 计算并保存公告 Embedding 向量（语义粗筛用）
                     try:
                         embedding = EmbeddingService.get_notice_embedding(notice)
                         if embedding:
-                            ProcurementNoticeDao.instance().update_embedding(notice.id, embedding)
+                            ProcurementNoticeDao().update_embedding(notice.id, embedding)
                             logger.info(f"[parse_detail-embedding] {idx}/{len(notices)} 成功: id={notice.id}")
                         else:
                             logger.warning(f"[parse_detail-embedding] {idx}/{len(notices)} 返回空: id={notice.id}")

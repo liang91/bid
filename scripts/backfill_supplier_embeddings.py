@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 def main():
     load_config()
-    dao = SupplierProfileDao.instance()
+    dao = SupplierProfileDao()
 
     suppliers = dao.list_all()
     if not suppliers:

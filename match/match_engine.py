@@ -28,9 +28,9 @@ class MatchEngine:
     """匹配引擎：封装粗筛 + 语义排序逻辑."""
 
     def __init__(self):
-        self.notice_dao = ProcurementNoticeDao.instance()
-        self.supplier_dao = SupplierProfileDao.instance()
-        self.region_dao = SupplierServiceRegionDao.instance()
+        self.notice_dao = ProcurementNoticeDao()
+        self.supplier_dao = SupplierProfileDao()
+        self.region_dao = SupplierServiceRegionDao()
 
     def rank_for_supplier(
         self,

@@ -207,12 +207,12 @@ CREATE TABLE supplier_profiles (
 CREATE TABLE supplier_service_regions (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     supplier_id BIGINT NOT NULL COMMENT '供应商ID，关联supplier_profiles.id',
-    province VARCHAR(32) NOT NULL DEFAULT '' COMMENT '可服务地区省份名称，如：四川、广东',
+    region_name VARCHAR(32) NOT NULL DEFAULT '' COMMENT '可服务地区省份名称，如：四川、广东',
 
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
 
     INDEX idx_supplier_id (supplier_id),
-    INDEX idx_province (province)
+    INDEX idx_region_name (region_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='供应商可服务地区表（省级）';
 
 -- ------------------------------------------------------------

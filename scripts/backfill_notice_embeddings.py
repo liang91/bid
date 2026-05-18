@@ -5,7 +5,7 @@
     python scripts/backfill_notice_embeddings.py [--batch 50]
 
 说明:
-    扫描 procurement_notices 表中 status=30 且 category_embedding IS NULL 的记录，
+    扫描 procurement_notices 表中 status=30 且 embedding 为空的记录，
     调用 Embedding API 计算向量并回写数据库。
 """
 import argparse
@@ -14,8 +14,12 @@ import sys
 
 sys.path.insert(0, ".")
 
+from sqlalchemy import func, or_, select
+
 from config import load_config
 from dao import ProcurementNoticeDao
+from dao.base import session_scope
+from model import ProcurementNotice
 from services.embedding_service import EmbeddingService
 
 logging.basicConfig(
@@ -33,19 +37,26 @@ def main():
     args = parser.parse_args()
 
     load_config()
-    dao = ProcurementNoticeDao.instance()
+    dao = ProcurementNoticeDao()
 
-    # 查询待补算的公告
-    sql = """
-        SELECT id FROM procurement_notices
-        WHERE status = 30 AND (category_embedding IS NULL OR JSON_LENGTH(category_embedding) = 0)
-        ORDER BY id DESC
-    """
-    if args.limit > 0:
-        sql += f" LIMIT {args.limit}"
+    # 查询待补算的公告（使用 ORM 方式）
+    with session_scope() as session:
+        stmt = (
+            select(ProcurementNotice.id)
+            .where(
+                ProcurementNotice.status == 30,
+                or_(
+                    ProcurementNotice.category_embedding.is_(None),
+                    func.json_length(ProcurementNotice.category_embedding) == 0,
+                ),
+            )
+            .order_by(ProcurementNotice.id.desc())
+        )
+        if args.limit > 0:
+            stmt = stmt.limit(args.limit)
+        result = session.execute(stmt)
+        notice_ids = [row[0] for row in result.all()]
 
-    rows = dao.execute(sql)
-    notice_ids = [row["id"] for row in rows]
     if not notice_ids:
         logger.info("没有待补算 Embedding 的公告")
         return
@@ -55,13 +66,13 @@ def main():
     success = failed = skipped = 0
     for i in range(0, len(notice_ids), args.batch):
         batch_ids = notice_ids[i : i + args.batch]
-        # 批量查询完整公告数据
-        placeholders = ", ".join(["%s"] * len(batch_ids))
-        sql = f"SELECT * FROM procurement_notices WHERE id IN ({placeholders})"
-        notice_rows = dao.execute(sql, tuple(batch_ids))
 
-        for row in notice_rows:
-            notice = dao._from_row(row)
+        with session_scope() as session:
+            notices = session.execute(
+                select(ProcurementNotice).where(ProcurementNotice.id.in_(batch_ids))
+            ).scalars().all()
+
+        for notice in notices:
             if not notice.project_name and not notice.title:
                 skipped += 1
                 continue
