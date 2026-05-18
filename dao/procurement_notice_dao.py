@@ -45,6 +45,7 @@ class ProcurementNoticeDao(BaseStorage):
             "qualification_summary", "industry_tags", "keywords",
             "suggested_company_types", "geographic_advantage",
             "abstract", "html", "parse_time",
+            "category_embedding",
             "status", "created_at", "updated_at",
         ]
         columns = ", ".join([self._quote_field(f) for f in fields])
@@ -119,6 +120,84 @@ class ProcurementNoticeDao(BaseStorage):
             for row in cursor.fetchall():
                 existing.add(row["url"])
         return existing
+
+    def update_embedding(self, notice_id: int, embedding: list) -> bool:
+        """更新公告的 Embedding 向量."""
+        sql = "UPDATE procurement_notices SET category_embedding = %s WHERE id = %s"
+        with self._get_cursor() as cursor:
+            cursor.execute(sql, (json.dumps(embedding), notice_id))
+            return cursor.rowcount > 0
+
+    def fetch_candidates_for_matching(
+        self,
+        region_names: list,
+        min_budget: float,
+        max_budget: float,
+        preferred_methods: list,
+        excluded_keywords: list,
+        sme_status: int,
+        ca_ready: int,
+        limit: int = 2000,
+    ) -> list:
+        """硬规则粗筛：根据地域、预算、采购方式、排除项、CA/中小企业、时效性筛选公告.
+
+        Args:
+            region_names: 供应商服务的省份列表
+            min_budget: 供应商最低预算偏好
+            max_budget: 供应商最高预算偏好
+            preferred_methods: 供应商偏好的采购方式列表
+            excluded_keywords: 供应商排除的关键词列表
+            sme_status: 供应商是否中小企业
+            ca_ready: 供应商是否已有CA
+            limit: 最大返回条数
+
+        Returns:
+            ProcurementNotice 列表（未解析 category_embedding）
+        """
+        if not region_names:
+            return []
+
+        conditions = [
+            "status = 30",  # 已解析的公告
+            "bid_deadline > NOW()",  # 未过期
+            "region_province IN (%s)" % ", ".join(["%s"] * len(region_names)),
+            "budget >= %s",
+            "budget <= %s",
+        ]
+        params = list(region_names) + [min_budget, max_budget]
+
+        # 采购方式过滤
+        if preferred_methods:
+            conditions.append("method IN (%s)" % ", ".join(["%s"] * len(preferred_methods)))
+            params.extend(preferred_methods)
+
+        # 排除关键词（标题/项目名称/摘要中不能出现）
+        for kw in excluded_keywords:
+            if kw.strip():
+                conditions.append("(title NOT LIKE %s AND project_name NOT LIKE %s AND abstract NOT LIKE %s)")
+                like_param = f"%%{kw.strip()}%%"
+                params.extend([like_param, like_param, like_param])
+
+        # 公告要求中小企业，供应商必须满足
+        conditions.append("(sme_oriented = 0 OR %s = 1)")
+        params.append(sme_status)
+
+        # 公告要求CA，供应商必须满足
+        conditions.append("(ca_required = 0 OR %s = 1)")
+        params.append(ca_ready)
+
+        sql = (
+            "SELECT * FROM procurement_notices WHERE "
+            + " AND ".join(conditions)
+            + " ORDER BY notice_date DESC LIMIT %s"
+        )
+        params.append(limit)
+
+        with self._get_cursor() as cursor:
+            cursor.execute(sql, tuple(params))
+            rows = cursor.fetchall()
+
+        return [self._from_row(row) for row in rows]
 
     def exists(self, url: str) -> bool:
         """检查 URL 是否已存在."""
@@ -243,6 +322,7 @@ class ProcurementNoticeDao(BaseStorage):
             "qualification_summary", "industry_tags", "keywords",
             "suggested_company_types", "geographic_advantage",
             "abstract", "parse_time",
+            "category_embedding",
             "status", "updated_at",
         ]
 
@@ -268,7 +348,7 @@ class ProcurementNoticeDao(BaseStorage):
             if val is None:
                 continue
 
-            if key in ("industry_tags", "keywords", "suggested_company_types"):
+            if key in ("industry_tags", "keywords", "suggested_company_types", "category_embedding"):
                 if isinstance(val, str):
                     try:
                         val = json.loads(val)
@@ -362,6 +442,7 @@ class ProcurementNoticeDao(BaseStorage):
             "abstract": d.get("abstract") or "",
             "html": d.get("html") or "",
             "parse_time": datetime.now(),
+            "category_embedding": _to_json(d.get("category_embedding")),
 
             "status": d.get("status") or 1,
             "created_at": _parse_crawled_at(d.get("created_at")),

@@ -35,6 +35,7 @@ CREATE TABLE procurement_notices (
     currency VARCHAR(8) NOT NULL DEFAULT 'CNY' COMMENT '币种',
     category_code VARCHAR(32) NOT NULL DEFAULT '' COMMENT '采购品目编码',
     category_name VARCHAR(128) NOT NULL DEFAULT '' COMMENT '采购品目名称',
+    category_embedding JSON COMMENT '所需服务品目的Embedding向量',
 
     -- 采购方式
     method VARCHAR(32) NOT NULL DEFAULT '' COMMENT '公开招标/竞争性谈判/询价/单一来源',
@@ -162,7 +163,6 @@ CREATE TABLE notice_packages (
 -- ------------------------------------------------------------
 CREATE TABLE supplier_profiles (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    user_id BIGINT NOT NULL DEFAULT 0 COMMENT '用户ID',
 
     -- 公司基本信息
     company_name VARCHAR(128) NOT NULL DEFAULT '' COMMENT '公司名称',
@@ -171,8 +171,12 @@ CREATE TABLE supplier_profiles (
     city VARCHAR(32) NOT NULL DEFAULT '' COMMENT '公司所在市',
     district VARCHAR(32) NOT NULL DEFAULT '' COMMENT '公司所在区',
 
+    sme_status TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否中小企业：0否 1是',
+    ca_ready TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否已有CA证书：0否 1是',
+
     -- 业务范围（MVP精简：关键词文本，不用编码字典）
     business_scope TEXT COMMENT '业务范围关键词，逗号分隔，如：建筑设计,基因检测,软件开发,IT运维',
+    business_embedding JSON COMMENT '业务范围Embedding向量',
 
     -- 资质证书（JSON简化存储）
     qualifications JSON COMMENT '资质证书列表：[{name, cert_no, valid_until}]',
@@ -181,11 +185,9 @@ CREATE TABLE supplier_profiles (
     -- 需求偏好
     min_budget DECIMAL(15,2) NOT NULL DEFAULT 0.00 COMMENT '最低预算偏好（0表示不限）',
     max_budget DECIMAL(15,2) NOT NULL DEFAULT 999999999.99 COMMENT '最高预算偏好',
-    preferred_regions VARCHAR(256) NOT NULL DEFAULT '' COMMENT '偏好地区，逗号分隔，如：四川省,北京市,浙江省',
     preferred_methods VARCHAR(128) NOT NULL DEFAULT '' COMMENT '偏好采购方式，逗号分隔，如：公开招标,竞争性谈判',
 
     -- 服务范围
-    service_regions VARCHAR(256) NOT NULL DEFAULT '' COMMENT '可服务地区，逗号分隔',
     joint_bid_willing TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否愿意联合体投标：0否 1是',
 
     -- 排除项
@@ -194,11 +196,24 @@ CREATE TABLE supplier_profiles (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
-    UNIQUE KEY uk_user (user_id),
     INDEX idx_region (province, city),
     FULLTEXT INDEX ft_business_scope (business_scope),
     FULLTEXT INDEX ft_qualification_summary (qualification_summary)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='供应商画像表（MVP精简版）';
+
+-- ------------------------------------------------------------
+-- 供应商可服务地区表（省级）
+-- ------------------------------------------------------------
+CREATE TABLE supplier_service_regions (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    supplier_id BIGINT NOT NULL COMMENT '供应商ID，关联supplier_profiles.id',
+    province VARCHAR(32) NOT NULL DEFAULT '' COMMENT '可服务地区省份名称，如：四川、广东',
+
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+
+    INDEX idx_supplier_id (supplier_id),
+    INDEX idx_province (province)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='供应商可服务地区表（省级）';
 
 -- ------------------------------------------------------------
 -- 匹配结果表 match_results
@@ -207,7 +222,7 @@ CREATE TABLE match_results (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
 
     -- 关联信息
-    supplier_id BIGINT NOT NULL DEFAULT 0 COMMENT '供应商ID（对应supplier_profiles.user_id）',
+    supplier_id BIGINT NOT NULL DEFAULT 0 COMMENT '供应商ID（对应supplier_profiles.id）',
     notice_id BIGINT NOT NULL DEFAULT 0 COMMENT '公告ID（对应procurement_notices.id）',
 
 

@@ -41,10 +41,14 @@ from .procurement_notice_dao import ProcurementNoticeDao  # noqa: E402
 from .notice_attachment_dao import NoticeAttachmentDao  # noqa: E402
 from .notice_package_dao import NoticePackageDao  # noqa: E402
 from .notice_qualification_dao import NoticeQualificationDao  # noqa: E402
+from .supplier_profile_dao import SupplierProfileDao  # noqa: E402
+from .supplier_service_region_dao import SupplierServiceRegionDao  # noqa: E402
 
 __all__ = [
     "ProcurementNoticeDao",
     "NoticeAttachmentDao",
     "NoticePackageDao",
     "NoticeQualificationDao",
+    "SupplierProfileDao",
+    "SupplierServiceRegionDao",
 ]

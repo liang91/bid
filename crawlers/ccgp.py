@@ -12,6 +12,7 @@ from dao import *
 from model import ProcurementNotice
 from .llm_parser import LLMParser
 from .parser_utils import strip_html_noise
+from services.embedding_service import EmbeddingService
 
 logger = logging.getLogger(__name__)
 
@@ -529,6 +530,18 @@ class CCGPCrawler:
                     NoticeAttachmentDao.instance().insert(notice.id, sub_attachments)
                     NoticePackageDao.instance().insert(notice.id, sub_packages)
                     NoticeQualificationDao.instance().insert(notice.id, sub_qualifications)
+
+                    # 计算并保存公告 Embedding 向量（语义粗筛用）
+                    try:
+                        embedding = EmbeddingService.get_notice_embedding(notice)
+                        if embedding:
+                            ProcurementNoticeDao.instance().update_embedding(notice.id, embedding)
+                            logger.info(f"[parse_detail-embedding] {idx}/{len(notices)} 成功: id={notice.id}")
+                        else:
+                            logger.warning(f"[parse_detail-embedding] {idx}/{len(notices)} 返回空: id={notice.id}")
+                    except Exception as e:
+                        logger.warning(f"[parse_detail-embedding] {idx}/{len(notices)} 失败: id={notice.id}, {e}")
+
                     success += 1
                     logger.info(f"[parse_detail-llm] {idx}/{len(notices)} 成功: {notice.project_name[:40]}...")
                 else:

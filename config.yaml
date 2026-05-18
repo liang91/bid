@@ -34,3 +34,9 @@ llm:
   api_key: "15568f63-5c45-4462-b8aa-d9a8e6a33212"
   # 模型名称
   model: "doubao-seed-2-0-pro-260215"
+
+# Embedding 语义向量配置
+embedding:
+  # 模型名称（豆包 Embedding 模型，如 doubao-embedding、doubao-embedding-lite 等）
+  # 请前往火山引擎 Ark 控制台确认可用模型 ID
+  model: "doubao-embedding-lite"
