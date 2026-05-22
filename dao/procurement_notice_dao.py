@@ -11,8 +11,8 @@ from sqlalchemy.dialects.mysql import insert
 
 from model import ProcurementNotice
 
-from .base import (
-    session_scope,
+from dao import (
+    db,
     _parse_crawled_at,
     _to_decimal,
     parse_amount,
@@ -104,7 +104,8 @@ class ProcurementNoticeDao:
     # -----------------------------------------------------------------------
     # 批量保存（INSERT ... ON DUPLICATE KEY UPDATE）
     # -----------------------------------------------------------------------
-    def save(self, notices: List[ProcurementNotice], batch_size: int = 100) -> dict:
+    @staticmethod
+    def save(notices: List[ProcurementNotice], batch_size: int = 100) -> dict:
         """批量保存公告，自动去重（基于 URL）并更新已存在记录.
 
         仅保存 notice_type 包含"公开招标"的公告，其他类型自动过滤。
@@ -116,7 +117,7 @@ class ProcurementNoticeDao:
             return {"inserted": 0, "updated": 0, "failed": 0, "skipped": 0}
 
         original_count = len(notices)
-        notices = [n for n in notices if self._is_open_tender(n)]
+        notices = [n for n in notices if ProcurementNoticeDao._is_open_tender(n)]
         skipped = original_count - len(notices)
         if skipped > 0:
             logger.info(f"[ProcurementNoticeDao] 过滤非公开招标 {skipped} 条，实际入库 {len(notices)} 条")
@@ -124,9 +125,9 @@ class ProcurementNoticeDao:
         inserted = updated = failed = 0
         batches = [notices[i: i + batch_size] for i in range(0, len(notices), batch_size)]
 
-        with session_scope() as session:
+        with db.begin() as session:
             for batch in batches:
-                values = [self._notice_to_values(n) for n in batch]
+                values = [ProcurementNoticeDao._notice_to_values(n) for n in batch]
                 try:
                     stmt = insert(ProcurementNotice).values(values)
                     # ON DUPLICATE KEY UPDATE 除 id/created_at 外全部更新
@@ -161,21 +162,21 @@ class ProcurementNoticeDao:
     # -----------------------------------------------------------------------
     # Embedding 更新
     # -----------------------------------------------------------------------
-    def update_embedding(self, notice_id: int, embedding: list) -> bool:
+    @staticmethod
+    def update_embedding(notice_id: int, embedding: list) -> bool:
         """更新公告的 Embedding 向量."""
-        with session_scope() as session:
+        with db.begin() as session:
             notice = session.get(ProcurementNotice, notice_id)
             if not notice:
                 return False
             notice.category_embedding = embedding
-            session.commit()
             return True
 
     # -----------------------------------------------------------------------
     # 粗筛查询（硬规则）
     # -----------------------------------------------------------------------
+    @staticmethod
     def fetch_candidates_for_matching(
-        self,
         region_names: list,
         min_budget: float,
         max_budget: float,
@@ -220,16 +221,17 @@ class ProcurementNoticeDao:
 
         stmt = stmt.order_by(ProcurementNotice.notice_date.desc()).limit(limit)
 
-        with session_scope() as session:
+        with db.begin() as session:
             result = session.execute(stmt)
             return list(result.scalars().all())
 
     # -----------------------------------------------------------------------
     # URL 存在性检查
     # -----------------------------------------------------------------------
-    def exists(self, url: str) -> bool:
+    @staticmethod
+    def exists(url: str) -> bool:
         """检查 URL 是否已存在."""
-        with session_scope() as session:
+        with db.begin() as session:
             result = session.execute(
                 select(ProcurementNotice.id).where(ProcurementNotice.url == url).limit(1)
             )
@@ -238,7 +240,8 @@ class ProcurementNoticeDao:
     # -----------------------------------------------------------------------
     # URL 去重
     # -----------------------------------------------------------------------
-    def dedup_by_url(self, notices: List[ProcurementNotice]) -> List[ProcurementNotice]:
+    @staticmethod
+    def dedup_by_url(notices: List[ProcurementNotice]) -> List[ProcurementNotice]:
         """基于数据库已有 URL 去重，返回尚未入库的公告."""
         if not notices:
             return []
@@ -247,7 +250,7 @@ class ProcurementNoticeDao:
         if not urls:
             return notices
 
-        with session_scope() as session:
+        with db() as session:
             existing = session.execute(
                 select(ProcurementNotice.url).where(ProcurementNotice.url.in_(urls))
             ).scalars().all()
@@ -258,7 +261,8 @@ class ProcurementNoticeDao:
     # -----------------------------------------------------------------------
     # 列表页批量插入（INSERT IGNORE）
     # -----------------------------------------------------------------------
-    def insert_list(self, notices: List[ProcurementNotice], batch_size: int = 100) -> dict:
+    @staticmethod
+    def insert_list(notices: List[ProcurementNotice], batch_size: int = 100) -> dict:
         """仅插入列表页获取到的公告（INSERT IGNORE，不更新已有记录）.
 
         Returns:
@@ -270,7 +274,7 @@ class ProcurementNoticeDao:
         inserted = 0
         batches = [notices[i: i + batch_size] for i in range(0, len(notices), batch_size)]
 
-        with session_scope() as session:
+        with db.begin() as session:
             for batch in batches:
                 values = []
                 for n in batch:
@@ -291,7 +295,6 @@ class ProcurementNoticeDao:
                 try:
                     stmt = insert(ProcurementNotice).values(values).prefix_with("IGNORE")
                     result = session.execute(stmt)
-                    session.commit()
                     inserted += result.rowcount
                 except Exception as e:
                     session.rollback()
@@ -303,9 +306,10 @@ class ProcurementNoticeDao:
     # -----------------------------------------------------------------------
     # 按状态查询
     # -----------------------------------------------------------------------
-    def fetch_by_status(self, status: int, platform: str, limit: int = 100) -> List[ProcurementNotice]:
+    @staticmethod
+    def fetch_by_status( status: int, platform: str, limit: int = 100) -> List[ProcurementNotice]:
         """按爬取状态查询公告记录."""
-        with session_scope() as session:
+        with db() as session:
             result = session.execute(
                 select(ProcurementNotice)
                 .where(ProcurementNotice.status == status, ProcurementNotice.platform == platform)
@@ -317,22 +321,23 @@ class ProcurementNoticeDao:
     # -----------------------------------------------------------------------
     # 更新 HTML
     # -----------------------------------------------------------------------
-    def update_html(self, notice_id: int, html: str) -> bool:
+    @staticmethod
+    def update_html(notice_id: int, html: str) -> bool:
         """更新详情页 HTML 内容，并将状态推进到 20."""
-        with session_scope() as session:
+        with db.begin() as session:
             notice = session.get(ProcurementNotice, notice_id)
             if not notice:
                 return False
             notice.html = html
             notice.status = 20
             notice.updated_at = datetime.now()
-            session.commit()
             return True
 
     # -----------------------------------------------------------------------
     # 更新解析结果
     # -----------------------------------------------------------------------
-    def update_parsed(self, notice: ProcurementNotice) -> bool:
+    @staticmethod
+    def update_parsed(notice: ProcurementNotice) -> bool:
         """更新 LLM 解析后的详情字段，并将状态推进到 30.
 
         Args:
@@ -345,7 +350,7 @@ class ProcurementNoticeDao:
             logger.error("[ProcurementNoticeDao] update_parsed 失败: notice.id 为空")
             return False
 
-        with session_scope() as session:
+        with db.begin() as session:
             existing = session.get(ProcurementNotice, notice.id)
             if not existing:
                 logger.error(f"[ProcurementNoticeDao] update_parsed 失败: id={notice.id} 不存在")
@@ -414,5 +419,4 @@ class ProcurementNoticeDao:
 
             existing.status = 30
             existing.updated_at = datetime.now()
-            session.commit()
             return True

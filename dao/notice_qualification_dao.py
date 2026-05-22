@@ -7,7 +7,7 @@ from sqlalchemy import delete
 
 from model import NoticeQualification
 
-from .base import session_scope, _to_tinyint
+from dao import db
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 class NoticeQualificationDao:
     """公告资质要求表存储器."""
 
+    @staticmethod
     def insert(self, notice_id: int, qualifications: List[dict]) -> int:
         """插入公告资质要求，先删除旧记录再批量插入.
 
@@ -48,12 +49,11 @@ class NoticeQualificationDao:
         if not records:
             return 0
 
-        with session_scope() as session:
+        with db.begin() as session:
             session.execute(
                 delete(NoticeQualification).where(
                     NoticeQualification.notice_id == notice_id
                 )
             )
             session.add_all(records)
-            session.commit()
             return len(records)

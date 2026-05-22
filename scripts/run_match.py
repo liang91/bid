@@ -17,7 +17,6 @@ import sys
 
 sys.path.insert(0, ".")
 
-from config import load_config
 from match.match_engine import MatchEngine
 from dao import SupplierProfileDao
 
@@ -36,7 +35,6 @@ def main():
     parser.add_argument("--output", type=str, default="", help="结果输出到文件（JSON）")
     args = parser.parse_args()
 
-    load_config()
     engine = MatchEngine()
 
     if args.supplier > 0:

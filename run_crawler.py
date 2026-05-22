@@ -22,7 +22,6 @@ import argparse
 import logging
 import sys
 
-from config import load_config
 from crawlers.ccgp import CCGPCrawler
 
 # 配置根日志格式与级别
@@ -89,20 +88,16 @@ def main():
     args = parser.parse_args()
 
     # 加载配置文件（固定路径：项目根目录 config.yaml）
-    try:
-        load_config()
-        logger.info("[配置] 已加载配置文件")
-    except FileNotFoundError as e:
-        logger.warning(f"[配置] 警告: {e}")
+
 
     # pages=0 表示爬取全部
     pages = None if args.pages == 0 else args.pages
 
     # parse 步骤前预检 LLM 配置
     if args.step == "parse":
-        from crawlers.llm_parser import LLMParser
+        from crawlers import llm_model
         try:
-            logger.info(f"[LLM] 已启用 LLM 解析，模型: {LLMParser.get_model()}")
+            logger.info(f"[LLM] 已启用 LLM 解析，模型: {llm_model}")
         except ValueError as e:
             logger.error(f"[LLM] 初始化失败: {e}")
             sys.exit(1)

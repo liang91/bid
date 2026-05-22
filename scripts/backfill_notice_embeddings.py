@@ -18,7 +18,7 @@ from sqlalchemy import func, or_, select
 
 from config import load_config
 from dao import ProcurementNoticeDao
-from dao.base import session_scope
+from dao import db
 from model import ProcurementNotice
 from services.embedding_service import EmbeddingService
 
@@ -40,7 +40,7 @@ def main():
     dao = ProcurementNoticeDao()
 
     # 查询待补算的公告（使用 ORM 方式）
-    with session_scope() as session:
+    with db() as session:
         stmt = (
             select(ProcurementNotice.id)
             .where(

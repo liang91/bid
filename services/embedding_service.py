@@ -17,7 +17,7 @@ from typing import List, Optional
 
 import numpy as np
 
-from config import load_config
+from config import config
 from model import ProcurementNotice, SupplierProfile
 
 logger = logging.getLogger(__name__)
@@ -35,19 +35,14 @@ class EmbeddingService:
         if cls._client is not None:
             return
 
-        try:
-            cfg = load_config()
-        except FileNotFoundError:
-            cfg = {}
-
-        api_key = cfg.get("llm.api_key")
+        api_key = config.get("llm.api_key")
         if not api_key:
             raise ValueError("缺少 LLM API 密钥配置 (llm.api_key)")
 
         # 复用 llm_parser 中的 Ark 客户端初始化方式
         from volcenginesdkarkruntime import Ark
-        cls._client = Ark(base_url=cfg.get("llm.base_url"), api_key=api_key)
-        cls._model = cfg.get("embedding.model") or cfg.get("llm.model")
+        cls._client = Ark(base_url=config.get("llm.base_url"), api_key=api_key)
+        cls._model = config.get("embedding.model") or config.get("llm.model")
         if not cls._model:
             raise ValueError("缺少 Embedding 模型配置 (embedding.model)")
 

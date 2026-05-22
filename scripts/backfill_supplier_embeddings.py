@@ -13,7 +13,6 @@ import sys
 
 sys.path.insert(0, ".")
 
-from config import load_config
 from dao import SupplierProfileDao
 from services.embedding_service import EmbeddingService
 
@@ -26,7 +25,6 @@ logger = logging.getLogger(__name__)
 
 
 def main():
-    load_config()
     dao = SupplierProfileDao()
 
     suppliers = dao.list_all()

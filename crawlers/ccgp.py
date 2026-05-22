@@ -1,5 +1,4 @@
 """中国政府采购网爬虫实现."""
-import logging
 import re
 import time
 from typing import List, Optional

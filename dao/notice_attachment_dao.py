@@ -1,13 +1,12 @@
 """notice_attachments 表的数据访问对象（SQLAlchemy 2.0）."""
 
 import logging
-from typing import List
 
 from sqlalchemy import delete
 
 from model import NoticeAttachment
 
-from .base import session_scope
+from dao import db
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +14,8 @@ logger = logging.getLogger(__name__)
 class NoticeAttachmentDao:
     """公告附件表存储器."""
 
-    def insert(self, notice_id: int, attachments: List[dict]) -> int:
+    @staticmethod
+    def insert(notice_id: int, attachments: list[dict]) -> int:
         """插入公告附件，先删除旧记录再批量插入.
 
         Args:
@@ -43,10 +43,9 @@ class NoticeAttachmentDao:
         if not records:
             return 0
 
-        with session_scope() as session:
+        with db.begin() as session:
             session.execute(
                 delete(NoticeAttachment).where(NoticeAttachment.notice_id == notice_id)
             )
             session.add_all(records)
-            session.commit()
             return len(records)

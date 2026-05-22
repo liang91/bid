@@ -5,10 +5,8 @@ from decimal import Decimal
 from typing import List
 
 from sqlalchemy import delete
-
 from model import NoticePackage
-
-from .base import session_scope, _to_decimal, parse_amount
+from dao import db
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +14,8 @@ logger = logging.getLogger(__name__)
 class NoticePackageDao:
     """公告分包表存储器."""
 
-    def insert(self, notice_id: int, packages: List[dict]) -> int:
+    @staticmethod
+    def insert(notice_id: int, packages: List[dict]) -> int:
         """插入公告分包，先删除旧记录再批量插入.
 
         Args:
@@ -48,10 +47,8 @@ class NoticePackageDao:
         if not records:
             return 0
 
-        with session_scope() as session:
-            session.execute(
-                delete(NoticePackage).where(NoticePackage.notice_id == notice_id)
-            )
+        with db.start() as session:
+            stmt = delete(NoticePackage).where(NoticePackage.notice_id == notice_id)
+            session.execute(stmt)
             session.add_all(records)
-            session.commit()
             return len(records)
