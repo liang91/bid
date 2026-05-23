@@ -8,20 +8,14 @@
     扫描 supplier_profiles 表中 business_embedding IS NULL 的记录，
     调用 Embedding API 计算向量并回写数据库。
 """
-import logging
 import sys
+
+from loguru import logger
 
 sys.path.insert(0, ".")
 
 from dao import SupplierProfileDao
 from services.embedding_service import EmbeddingService
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-logger = logging.getLogger(__name__)
 
 
 def main():

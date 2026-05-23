@@ -12,20 +12,14 @@
 """
 import argparse
 import json
-import logging
 import sys
+
+from loguru import logger
 
 sys.path.insert(0, ".")
 
 from match.match_engine import MatchEngine
 from dao import SupplierProfileDao
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-logger = logging.getLogger(__name__)
 
 
 def main():

@@ -1,26 +1,28 @@
 """notice_attachments 表的数据访问对象（SQLAlchemy 2.0）."""
 
-import logging
+from typing import List
+
+from loguru import logger
 
 from sqlalchemy import delete
 
 from model import NoticeAttachment
+from model.notice_attachment import NoticeAttachmentDto
 
 from dao import db
 
-logger = logging.getLogger(__name__)
 
 
 class NoticeAttachmentDao:
     """公告附件表存储器."""
 
     @staticmethod
-    def insert(notice_id: int, attachments: list[dict]) -> int:
+    def insert(notice_id: int, attachments: List[NoticeAttachmentDto]) -> int:
         """插入公告附件，先删除旧记录再批量插入.
 
         Args:
             notice_id: 关联公告ID
-            attachments: LLM 解析出的附件列表，元素格式 {"name": ..., "url": ...}
+            attachments: 附件 DTO 列表
 
         Returns:
             插入条数
@@ -29,14 +31,12 @@ class NoticeAttachmentDao:
             return 0
 
         records = []
-        for item in attachments:
-            if not isinstance(item, dict):
-                continue
+        for dto in attachments:
             records.append(
                 NoticeAttachment(
                     notice_id=notice_id,
-                    name=str(item.get("name") or "")[:256],
-                    url=str(item.get("url") or "")[:512],
+                    name=dto.name,
+                    url=dto.url,
                 )
             )
 

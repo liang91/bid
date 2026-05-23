@@ -355,6 +355,75 @@ def parse_purchaser_contact_person(content_text: Optional[str]) -> str:
 _NOISE_HTML_TAGS = {"head", "script", "style", "nav", "footer", "header", "iframe", "noscript", "aside", "svg", "canvas", "link", "meta"}
 
 
+def parse_chinese_datetime(text: Optional[str]) -> Optional[datetime]:
+    """解析中文日期时间字符串为 datetime 对象.
+
+    示例:
+        >>> parse_chinese_datetime("2026年05月15日  16:55")
+        datetime(2026, 5, 15, 16, 55)
+        >>> parse_chinese_datetime("2026-05-14 15:30")
+        datetime(2026, 5, 14, 15, 30)
+    """
+    if not text:
+        return None
+    text = str(text).strip()
+    for pattern, fmt in _DT_PATTERNS:
+        m = re.match(pattern, text)
+        if m:
+            try:
+                normalized = (
+                    m.group(0)
+                    .replace("年", "-")
+                    .replace("月", "-")
+                    .replace("日", "")
+                    .replace("/", "-")
+                    .replace("点", ":")
+                    .replace("分", "")
+                )
+                return datetime.strptime(normalized, fmt)
+            except ValueError:
+                continue
+    return None
+
+
+def to_decimal(value) -> Optional[Decimal]:
+    """将任意值转为 Decimal，失败返回 None."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, Decimal):
+        return value
+    try:
+        return Decimal(str(value).replace(",", ""))
+    except Exception:
+        return None
+
+
+def to_tinyint(value) -> int:
+    """将任意值转为 tinyint (0/1)."""
+    if value is None or value == "":
+        return 0
+    if isinstance(value, bool):
+        return 1 if value else 0
+    if isinstance(value, (int, float)):
+        return 1 if value else 0
+    text = str(value).strip().lower()
+    if text in ("1", "true", "yes", "是", "有", "需要", "要求"):
+        return 1
+    return 0
+
+
+def parse_crawled_at(value) -> datetime:
+    """解析爬取时间，失败返回当前时间."""
+    if value is None:
+        return datetime.now()
+    if isinstance(value, datetime):
+        return value
+    try:
+        return datetime.strptime(str(value), "%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return datetime.now()
+
+
 def strip_html_noise(html: str) -> str:
     """去掉 HTML 中的 head/foot/css/js 等噪声标签，保留正文 HTML 结构.
 

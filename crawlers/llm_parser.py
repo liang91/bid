@@ -8,12 +8,9 @@
     result = LLMParser.parse(prompt)
 """
 import json
-import logging
-from typing import Optional
 
+from loguru import logger
 from crawlers import llm_client, llm_model
-
-logger = logging.getLogger(__name__)
 
 
 class LLMParser:
@@ -44,7 +41,6 @@ class LLMParser:
         except Exception as e:
             logger.error(f"[LLM解析失败] {e}")
             return {}
-
 
     @staticmethod
     def _extract_json(content: str) -> dict:

@@ -1,30 +1,37 @@
 """公告附件表."""
 
 from datetime import datetime
+from typing import Optional
 from model import Base
 
+from pydantic import BaseModel, Field
 from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, String
 from sqlalchemy.dialects.mysql import TINYINT
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 
 class NoticeAttachment(Base):
     __tablename__ = "notice_attachments"
-    __table_args__ = (Index("idx_notice_id", "notice_id"),)
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    notice_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("procurement_notices.id"), default=0)
-    name: Mapped[str] = mapped_column(String(256), default="")
-    url: Mapped[str] = mapped_column(String(512), default="")
-    object_key: Mapped[str] = mapped_column(String(256), default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True, comment="主键ID")
+    notice_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("procurement_notices.id"), default=0,
+                                           comment="公告ID")
+    name: Mapped[str] = mapped_column(String(256), default="", comment="附件名称")
+    url: Mapped[str] = mapped_column(String(512), default="", comment="附件URL")
+    object_key: Mapped[str] = mapped_column(String(256), default="", comment="对象存储Key")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, comment="创建时间")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now,
+                                                 comment="更新时间")
 
-    notice: Mapped["ProcurementNotice"] = relationship(back_populates="attachments_rel")
 
-    def to_dict(self) -> dict:
-        return {c.name: getattr(self, c.name) for c in self.__table__.columns}
 
-    def to_json(self, ensure_ascii: bool = False, indent: int = 2) -> str:
-        import json
-        return json.dumps(self.to_dict(), ensure_ascii=ensure_ascii, indent=indent, default=str)
+class NoticeAttachmentDto(BaseModel):
+    """公告附件数据类."""
+
+    id: Optional[int] = None
+    notice_id: int = 0
+    name: str = ""
+    url: str = ""
+    object_key: str = ""
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)

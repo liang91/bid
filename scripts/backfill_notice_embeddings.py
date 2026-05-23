@@ -9,8 +9,9 @@
     调用 Embedding API 计算向量并回写数据库。
 """
 import argparse
-import logging
 import sys
+
+from loguru import logger
 
 sys.path.insert(0, ".")
 
@@ -21,13 +22,6 @@ from dao import ProcurementNoticeDao
 from dao import db
 from model import ProcurementNotice
 from services.embedding_service import EmbeddingService
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-logger = logging.getLogger(__name__)
 
 
 def main():

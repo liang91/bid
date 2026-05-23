@@ -12,15 +12,12 @@
     score = EmbeddingService.cosine_similarity(vec_a, vec_b)
 """
 import json
-import logging
-from typing import List, Optional
+from typing import Any, List, Optional
 
+from loguru import logger
 import numpy as np
 
 from config import config
-from model import ProcurementNotice, SupplierProfile
-
-logger = logging.getLogger(__name__)
 
 
 class EmbeddingService:
@@ -51,7 +48,7 @@ class EmbeddingService:
     # -------------------------------------------------------------------------
 
     @staticmethod
-    def build_supplier_text(supplier: SupplierProfile) -> str:
+    def build_supplier_text(supplier: Any) -> str:
         """将供应商画像拼接为一段自然语言文本，用于 Embedding."""
         parts = [
             f"公司业务范围：{supplier.business_scope}",
@@ -63,7 +60,7 @@ class EmbeddingService:
         return "。".join(parts)
 
     @staticmethod
-    def build_notice_text(notice: ProcurementNotice) -> str:
+    def build_notice_text(notice: Any) -> str:
         """将招标公告拼接为一段自然语言文本，用于 Embedding."""
         keywords = "、".join(notice.keywords) if notice.keywords else ""
         parts = [
@@ -145,13 +142,13 @@ class EmbeddingService:
     # -------------------------------------------------------------------------
 
     @classmethod
-    def get_supplier_embedding(cls, supplier: SupplierProfile) -> Optional[List[float]]:
+    def get_supplier_embedding(cls, supplier: Any) -> Optional[List[float]]:
         """获取供应商画像的 Embedding 向量."""
         text = cls.build_supplier_text(supplier)
         return cls.embed(text)
 
     @classmethod
-    def get_notice_embedding(cls, notice: ProcurementNotice) -> Optional[List[float]]:
+    def get_notice_embedding(cls, notice: Any) -> Optional[List[float]]:
         """获取招标公告的 Embedding 向量."""
         text = cls.build_notice_text(notice)
         return cls.embed(text)

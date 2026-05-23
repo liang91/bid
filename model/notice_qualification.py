@@ -1,37 +1,45 @@
 """公告资质要求表."""
 
 from datetime import datetime
+from typing import Optional
 from model import Base
 
+from pydantic import BaseModel, Field
 from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, String
 from sqlalchemy.dialects.mysql import TINYINT
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 
 class NoticeQualification(Base):
     __tablename__ = "notice_qualifications"
-    __table_args__ = (
-        Index("idx_notice_qual", "notice_id", "qualification_type"),
-        Index("idx_qual_name", "name"),
-    )
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    notice_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("procurement_notices.id"), default=0)
-    qualification_type: Mapped[str] = mapped_column(String(32), default="")
-    name: Mapped[str] = mapped_column(String(128), default="")
-    required_scope: Mapped[str] = mapped_column(String(256), default="")
-    valid_required: Mapped[int] = mapped_column(TINYINT, default=1)
-    evidence_type: Mapped[str] = mapped_column(String(64), default="")
-    joint_bid_acceptable: Mapped[int] = mapped_column(TINYINT, default=0)
-    sort_order: Mapped[int] = mapped_column(BigInteger, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True, comment="主键ID")
+    notice_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("procurement_notices.id"), default=0,
+                                           comment="公告ID")
+    qualification_type: Mapped[str] = mapped_column(String(32), default="", comment="资质类型")
+    name: Mapped[str] = mapped_column(String(128), default="", comment="资质名称")
+    required_scope: Mapped[str] = mapped_column(String(256), default="", comment="资质要求范围")
+    valid_required: Mapped[int] = mapped_column(TINYINT, default=1, comment="是否需要有效资质")
+    evidence_type: Mapped[str] = mapped_column(String(64), default="", comment="证明材料类型")
+    joint_bid_acceptable: Mapped[int] = mapped_column(TINYINT, default=0, comment="是否接受联合投标")
+    sort_order: Mapped[int] = mapped_column(BigInteger, default=0, comment="排序序号")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, comment="创建时间")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now,
+                                                 comment="更新时间")
 
-    notice: Mapped["ProcurementNotice"] = relationship(back_populates="qualifications_rel")
 
-    def to_dict(self) -> dict:
-        return {c.name: getattr(self, c.name) for c in self.__table__.columns}
 
-    def to_json(self, ensure_ascii: bool = False, indent: int = 2) -> str:
-        import json
-        return json.dumps(self.to_dict(), ensure_ascii=ensure_ascii, indent=indent, default=str)
+class NoticeQualificationDto(BaseModel):
+    """公告资质要求数据类."""
+
+    id: Optional[int] = None
+    notice_id: int = 0
+    qualification_type: str = ""
+    name: str = ""
+    required_scope: str = ""
+    valid_required: int = 1
+    evidence_type: str = ""
+    joint_bid_acceptable: int = 0
+    sort_order: int = 0
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)

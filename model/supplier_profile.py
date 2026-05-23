@@ -2,65 +2,75 @@
 
 from datetime import datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import Optional
 from model import Base
 
+from pydantic import BaseModel, Field
 from sqlalchemy import BigInteger, DateTime, DECIMAL, Index, JSON, String, Text
 from sqlalchemy.dialects.mysql import TINYINT
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 
 class SupplierProfile(Base):
     __tablename__ = "supplier_profiles"
-    __table_args__ = (
-        Index("idx_region", "province", "city"),
-        Index("ft_business_scope", "business_scope", mysql_prefix="FULLTEXT"),
-        Index("ft_qualification_summary", "qualification_summary", mysql_prefix="FULLTEXT"),
-    )
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True, comment="主键ID")
 
     # === 公司基本信息 ===
-    company_name: Mapped[str] = mapped_column(String(128), default="")
-    company_scale: Mapped[str] = mapped_column(String(32), default="")
-    province: Mapped[str] = mapped_column(String(32), default="")
-    city: Mapped[str] = mapped_column(String(32), default="")
-    district: Mapped[str] = mapped_column(String(32), default="")
+    company_name: Mapped[str] = mapped_column(String(128), default="", comment="公司名称")
+    company_scale: Mapped[str] = mapped_column(String(32), default="", comment="公司规模")
+    province: Mapped[str] = mapped_column(String(32), default="", comment="省份")
+    city: Mapped[str] = mapped_column(String(32), default="", comment="城市")
+    district: Mapped[str] = mapped_column(String(32), default="", comment="区县")
 
     # === 身份标签 ===
-    sme_status: Mapped[int] = mapped_column(TINYINT, default=0)
-    ca_ready: Mapped[int] = mapped_column(TINYINT, default=0)
+    sme_status: Mapped[int] = mapped_column(TINYINT, default=0, comment="中小企业状态")
+    ca_ready: Mapped[int] = mapped_column(TINYINT, default=0, comment="是否具备CA")
 
     # === 业务范围 ===
-    business_scope: Mapped[Optional[str]] = mapped_column(Text)
-    business_embedding: Mapped[Optional[list]] = mapped_column(JSON, default=list)
+    business_scope: Mapped[Optional[str]] = mapped_column(Text, comment="业务范围")
+    business_embedding: Mapped[Optional[list]] = mapped_column(JSON, default=list, comment="业务语义向量")
 
     # === 资质证书 ===
-    qualifications: Mapped[Optional[list]] = mapped_column(JSON, default=list)
-    qualification_summary: Mapped[str] = mapped_column(String(512), default="")
+    qualifications: Mapped[Optional[list]] = mapped_column(JSON, default=list, comment="资质证书列表")
+    qualification_summary: Mapped[str] = mapped_column(String(512), default="", comment="资质摘要")
 
     # === 需求偏好 ===
-    min_budget: Mapped[Decimal] = mapped_column(DECIMAL(15, 2), default=Decimal("0.00"))
-    max_budget: Mapped[Decimal] = mapped_column(DECIMAL(15, 2), default=Decimal("999999999.99"))
-    preferred_methods: Mapped[str] = mapped_column(String(128), default="")
+    min_budget: Mapped[Decimal] = mapped_column(DECIMAL(15, 2), default=Decimal("0.00"), comment="最小预算")
+    max_budget: Mapped[Decimal] = mapped_column(DECIMAL(15, 2), default=Decimal("999999999.99"), comment="最大预算")
+    preferred_methods: Mapped[str] = mapped_column(String(128), default="", comment="偏好采购方式")
 
     # === 联合体 ===
-    joint_bid_willing: Mapped[int] = mapped_column(TINYINT, default=0)
+    joint_bid_willing: Mapped[int] = mapped_column(TINYINT, default=0, comment="是否愿意联合投标")
 
     # === 排除项 ===
-    excluded_keywords: Mapped[str] = mapped_column(String(256), default="")
+    excluded_keywords: Mapped[str] = mapped_column(String(256), default="", comment="排除关键词")
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, comment="创建时间")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now,
+                                                 comment="更新时间")
 
-    # === Relationships ===
-    service_regions_rel: Mapped[List["SupplierServiceRegion"]] = relationship(
-        back_populates="supplier", cascade="all, delete-orphan", lazy="selectin"
-    )
 
-    def to_dict(self) -> dict:
-        return {c.name: getattr(self, c.name) for c in self.__table__.columns}
 
-    def to_json(self, ensure_ascii: bool = False, indent: int = 2) -> str:
-        import json
-        return json.dumps(self.to_dict(), ensure_ascii=ensure_ascii, indent=indent, default=str)
+class SupplierProfileDto(BaseModel):
+    """供应商画像数据类."""
+
+    id: Optional[int] = None
+    company_name: str = ""
+    company_scale: str = ""
+    province: str = ""
+    city: str = ""
+    district: str = ""
+    sme_status: int = 0
+    ca_ready: int = 0
+    business_scope: Optional[str] = None
+    business_embedding: Optional[list] = None
+    qualifications: Optional[list] = None
+    qualification_summary: str = ""
+    min_budget: Decimal = Decimal("0.00")
+    max_budget: Decimal = Decimal("999999999.99")
+    preferred_methods: str = ""
+    joint_bid_willing: int = 0
+    excluded_keywords: str = ""
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)

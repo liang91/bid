@@ -1,7 +1,8 @@
 """supplier_service_regions 表的数据访问对象（SQLAlchemy 2.0）."""
 
-import logging
 from typing import List
+
+from loguru import logger
 
 from sqlalchemy import delete, select
 
@@ -9,7 +10,6 @@ from model import SupplierServiceRegion
 
 from dao import db
 
-logger = logging.getLogger(__name__)
 
 
 class SupplierServiceRegionDao:
@@ -26,7 +26,7 @@ class SupplierServiceRegionDao:
             return [row[0] for row in result.all()]
 
     @staticmethod
-    def replace_regions(self, supplier_id: int, regions: List[str]) -> bool:
+    def replace_regions(supplier_id: int, regions: List[str]) -> bool:
         """全量替换供应商的服务地区（先删除再插入）."""
         if not regions:
             return False
@@ -43,7 +43,7 @@ class SupplierServiceRegionDao:
             return True
 
     @staticmethod
-    def batch_get_regions(self, supplier_ids: List[int]) -> dict:
+    def batch_get_regions(supplier_ids: List[int]) -> dict:
         """批量获取多个供应商的服务地区.
 
         Returns:
@@ -59,7 +59,6 @@ class SupplierServiceRegionDao:
             data = {}
             for sid, region_name in result.all():
                 data.setdefault(sid, []).append(region_name)
-            # 确保传入的每个 id 都有键（空列表）
             for sid in supplier_ids:
                 data.setdefault(sid, [])
             return data

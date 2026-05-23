@@ -1,27 +1,27 @@
 """notice_qualifications 表的数据访问对象（SQLAlchemy 2.0）."""
 
-import logging
 from typing import List
 
-from sqlalchemy import delete
+from loguru import logger
 
+from sqlalchemy import delete
 from model import NoticeQualification
+from model.notice_qualification import NoticeQualificationDto
 
 from dao import db
 
-logger = logging.getLogger(__name__)
 
 
 class NoticeQualificationDao:
     """公告资质要求表存储器."""
 
     @staticmethod
-    def insert(self, notice_id: int, qualifications: List[dict]) -> int:
+    def insert(notice_id: int, qualifications: List[NoticeQualificationDto]) -> int:
         """插入公告资质要求，先删除旧记录再批量插入.
 
         Args:
             notice_id: 关联公告ID
-            qualifications: LLM 解析出的资质列表
+            qualifications: 资质要求 DTO 列表
 
         Returns:
             插入条数
@@ -30,19 +30,17 @@ class NoticeQualificationDao:
             return 0
 
         records = []
-        for idx, item in enumerate(qualifications):
-            if not isinstance(item, dict):
-                continue
+        for dto in qualifications:
             records.append(
                 NoticeQualification(
                     notice_id=notice_id,
-                    qualification_type=str(item.get("qualification_type") or "")[:32],
-                    name=str(item.get("name") or "")[:128],
-                    required_scope=str(item.get("required_scope") or "")[:256],
-                    valid_required=_to_tinyint(item.get("valid_required")),
-                    evidence_type=str(item.get("evidence_type") or "")[:64],
-                    joint_bid_acceptable=_to_tinyint(item.get("joint_bid_acceptable")),
-                    sort_order=idx,
+                    qualification_type=dto.qualification_type,
+                    name=dto.name,
+                    required_scope=dto.required_scope,
+                    valid_required=dto.valid_required,
+                    evidence_type=dto.evidence_type,
+                    joint_bid_acceptable=dto.joint_bid_acceptable,
+                    sort_order=dto.sort_order,
                 )
             )
 

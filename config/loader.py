@@ -2,13 +2,13 @@
 
 只支持从 YAML 配置文件读取配置，不支持环境变量覆盖和命令行参数覆盖.
 """
-import logging
+from loguru import logger
+
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 import yaml
 
-logger = logging.getLogger(__name__)
 
 DEFAULT_CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
 
@@ -71,6 +71,7 @@ def load_config(path: Optional[Path] = None) -> Config:
         raise ValueError("配置文件顶层必须是字典结构")
 
     return Config(data)
+
 
 # 配置数据
 config: Config | None = None

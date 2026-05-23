@@ -10,8 +10,9 @@
     engine = MatchEngine()
     ranked = engine.rank_for_supplier(supplier_id, top_k=200)
 """
-import logging
 from typing import List, Tuple
+
+from loguru import logger
 
 from model import ProcurementNotice, SupplierProfile
 from dao import (
@@ -20,8 +21,6 @@ from dao import (
     SupplierServiceRegionDao,
 )
 from services.embedding_service import EmbeddingService
-
-logger = logging.getLogger(__name__)
 
 
 class MatchEngine:
