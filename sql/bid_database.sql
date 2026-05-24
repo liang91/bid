@@ -31,7 +31,6 @@ CREATE TABLE procurement_notices (
     project_no VARCHAR(128) NOT NULL DEFAULT '' COMMENT '项目编号',
     purchase_plan_no VARCHAR(128) NOT NULL DEFAULT '' COMMENT '采购计划编号',
     budget DECIMAL(15,2) NOT NULL DEFAULT 0.00 COMMENT '预算金额',
-    max_limit DECIMAL(15,2) NOT NULL DEFAULT 0.00 COMMENT '最高限价',
     currency VARCHAR(8) NOT NULL DEFAULT 'CNY' COMMENT '币种',
     category_code VARCHAR(32) NOT NULL DEFAULT '' COMMENT '采购品目编码',
     category_name VARCHAR(128) NOT NULL DEFAULT '' COMMENT '采购品目名称',
@@ -151,9 +150,9 @@ CREATE TABLE notice_packages (
     no VARCHAR(16) NOT NULL DEFAULT '' COMMENT '包号',
     name VARCHAR(256) NOT NULL DEFAULT '' COMMENT '包名称',
     budget DECIMAL(15,2) NOT NULL DEFAULT 0.00 COMMENT '包预算',
-    max_limit DECIMAL(15,2) NOT NULL DEFAULT 0.00 COMMENT '包最高限价',
     quantity DECIMAL(15,4) NOT NULL DEFAULT 0.0000 COMMENT '数量',
     unit VARCHAR(32) NOT NULL DEFAULT '' COMMENT '单位',
+    intro VARCHAR(1024) NOT NULL DEFAULT '' COMMENT '标项规格描述或概况介绍',
 
     INDEX idx_notice_pkg (notice_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='招标公告分包信息';

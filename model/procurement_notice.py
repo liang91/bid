@@ -38,7 +38,6 @@ class ProcurementNotice(Base):
 
     # === 金额 ===
     budget: Mapped[Decimal] = mapped_column(DECIMAL(15, 2), default=Decimal("0.00"), comment="采购预算金额")
-    max_limit: Mapped[Decimal] = mapped_column(DECIMAL(15, 2), default=Decimal("0.00"), comment="采购金额上限")
     currency: Mapped[str] = mapped_column(String(8), default="CNY", comment="币种")
 
     # === 品目 ===
@@ -122,7 +121,6 @@ class ProcurementNoticeDto(BaseModel):
     project_no: str = ""
     purchase_plan_no: str = ""
     budget: Decimal = Decimal("0.00")
-    max_limit: Decimal = Decimal("0.00")
     currency: str = "CNY"
     category_code: str = ""
     category_name: str = ""

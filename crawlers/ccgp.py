@@ -27,7 +27,6 @@ from .parser_utils import (
     standardize_publish_time,
     strip_html_noise,
     extract_region,
-    extract_project_code,
     parse_time_range,
     parse_purchaser_contact_person,
 )
@@ -75,8 +74,7 @@ class CCGPCrawler:
 - purchase_plan_no: 采购计划编号
 - category_name: 采购品目名称（如"货物/通用设备/计算机设备及软件/计算机网络设备"）
 - method: 采购方式（如"公开招标"、"竞争性谈判"、"询价"、"单一来源"）
-- budget: 预算金额（如"￥100.000000万元（人民币）"）
-- max_limit: 最高限价
+- budget: 预算金额（统一换算成元，格式：123.11，最多保留两位非0小数，如果都是0，不保留小数）
 - currency: 币种，默认为"CNY"
 
 - region_province: 采购方所在省份（如"江西省"、"北京市"）
@@ -90,7 +88,7 @@ class CCGPCrawler:
 - bid_open_time: 开标时间，格式 YYYY-MM-DD HH:MM
 
 - bid_platform: 投标平台/开标地点/获取招标文件的地点
-- doc_price: 招标文件/采购文件售价（如"￥0元"、"￥500元"）
+- doc_price: 招标文件/采购文件售价，统一换算成元，格式:123.12（最多保留两位小数，如果都是0，不保留小数）
 
 - purchaser_name: 采购人名称
 - purchaser_address: 采购人地址
@@ -120,10 +118,10 @@ class CCGPCrawler:
     {
         no: 采购包编号
         name: 采购包名称,
-        budge: 包预算,
-        max_limit: 采购限额,
+        budge: 包预算（统一换算成元，格式：123.11，保留两位非0小数，如果都是0不保留小数）,
         quantity: 采购数量,
-        unit: 货品单位
+        unit: 货品单位,
+        intro: 标项规格描述或概况介绍
     }
 ] 采购包列表
 
@@ -232,7 +230,7 @@ class CCGPCrawler:
         """将 LLM 或爬虫原始值清洗为 DTO 字段对应类型."""
         if value is None or value == "":
             return None
-        if key in ("budget", "max_limit", "doc_price"):
+        if key in ("budget", "doc_price"):
             return parse_amount(str(value)) or Decimal("0.00")
         if key in ("notice_date", "doc_obtain_start", "doc_obtain_end", "bid_deadline", "bid_open_time"):
             return parse_chinese_datetime(str(value)) or _DEFAULT_DATETIME
@@ -267,7 +265,6 @@ class CCGPCrawler:
                 no=str(item.get("no") or "")[:16],
                 name=str(item.get("name") or "")[:256],
                 budget=parse_amount(str(item.get("budge") or item.get("budget") or "")) or Decimal("0.00"),
-                max_limit=parse_amount(str(item.get("max_limit") or "")) or Decimal("0.00"),
                 quantity=Decimal(str(item.get("quantity") or "0").replace(",", "")) if item.get(
                     "quantity") else Decimal("0.0000"),
                 unit=str(item.get("unit") or "")[:32],
@@ -297,10 +294,7 @@ class CCGPCrawler:
     # -------------------------------------------------------------------------
 
     @staticmethod
-    def _clean_html_for_llm(html: str, max_length: int = 15000) -> str:
-        if not html:
-            return ""
-
+    def _clean_html_for_llm(html: str) -> str:
         soup = BeautifulSoup(html, "lxml")
         _NOISE_CLASSES = re.compile(
             r"header|footer|nav|menu|sidebar|breadcrumb|banner|advert|ad-|toolbar|modal|popup|dialog",
@@ -331,6 +325,8 @@ class CCGPCrawler:
             if block:
                 block.attrs = {}
                 for inner in block.find_all(True):
+                    if inner.name == "a":
+                        continue
                     inner.attrs = {}
                 main_blocks.append(str(block))
 
@@ -340,11 +336,10 @@ class CCGPCrawler:
             body = soup.find("body")
             root = body if body else soup
             for tag in root.find_all(True):
+                if tag.name == "a":
+                    continue
                 tag.attrs = {}
             result = str(root)
-
-        if len(result) > max_length:
-            result = result[:max_length] + "\n<!-- 内容已截断 -->"
 
         return result
 
@@ -367,9 +362,6 @@ class CCGPCrawler:
             _std = standardize_publish_time(str(dto.notice_date))
             if _std:
                 dto.notice_date = parse_chinese_datetime(_std) or dto.notice_date
-
-        # 项目编号
-        dto.project_no = extract_project_code(dto.abstract, dto.project_name)
 
         # 采购方联系人
         if not dto.purchaser_contact_person:

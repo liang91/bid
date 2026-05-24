@@ -223,11 +223,11 @@ def parse_amount(text: Optional[str]) -> Optional[Decimal]:
         Decimal('797217.0000')
     """
     if not text:
-        return ""
+        return Decimal(0)
 
     text = text.strip()
     if not text or text in ("-", "—", "无", "null", "NULL"):
-        return ""
+        return Decimal(0)
 
     m = _AMOUNT_PATTERNS[0].search(text)
     if m:
@@ -251,7 +251,7 @@ def parse_amount(text: Optional[str]) -> Optional[Decimal]:
         except Exception:
             pass
 
-    return None
+    return Decimal(0)
 
 
 def amount_to_fen(amount: Optional[Decimal]) -> Optional[int]:
@@ -293,32 +293,6 @@ _PROJECT_CODE_PATTERNS = [
     ),
 ]
 
-
-def extract_project_code(
-    content_text: Optional[str], title: Optional[str] = None
-) -> str:
-    """从正文或标题中提取项目编号，未找到返回空字符串."""
-    if not content_text and not title:
-        return ""
-
-    texts = []
-    if content_text:
-        texts.append(content_text)
-    if title:
-        texts.append(title)
-
-    for text in texts:
-        for pattern in _PROJECT_CODE_PATTERNS:
-            m = pattern.search(text)
-            if m:
-                code = m.group(1).strip()
-                code = re.sub(r"[，,；;.\s]+$", "", code)
-                if code and len(code) >= 3:
-                    return code
-
-    return None
-
-
 # ---------------------------------------------------------------------------
 # 采购方联系人解析
 # ---------------------------------------------------------------------------
@@ -343,7 +317,7 @@ def parse_purchaser_contact_person(content_text: Optional[str]) -> str:
         # 过滤掉纯电话号码
         if re.search(r"[\u4e00-\u9fa5]", name):
             return name
-    return None
+    return ""
 
 
 # ---------------------------------------------------------------------------

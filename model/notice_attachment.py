@@ -24,7 +24,6 @@ class NoticeAttachment(Base):
                                                  comment="更新时间")
 
 
-
 class NoticeAttachmentDto(BaseModel):
     """公告附件数据类."""
 

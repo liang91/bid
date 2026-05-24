@@ -23,10 +23,6 @@ class NoticeQualification(Base):
     evidence_type: Mapped[str] = mapped_column(String(64), default="", comment="证明材料类型")
     joint_bid_acceptable: Mapped[int] = mapped_column(TINYINT, default=0, comment="是否接受联合投标")
     sort_order: Mapped[int] = mapped_column(BigInteger, default=0, comment="排序序号")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, comment="创建时间")
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now,
-                                                 comment="更新时间")
-
 
 
 class NoticeQualificationDto(BaseModel):
@@ -41,5 +37,3 @@ class NoticeQualificationDto(BaseModel):
     evidence_type: str = ""
     joint_bid_acceptable: int = 0
     sort_order: int = 0
-    created_at: datetime = Field(default_factory=datetime.now)
-    updated_at: datetime = Field(default_factory=datetime.now)

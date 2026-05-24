@@ -37,7 +37,6 @@ class NoticePackageDao:
                     no=dto.no,
                     name=dto.name,
                     budget=dto.budget,
-                    max_limit=dto.max_limit,
                     quantity=dto.quantity,
                     unit=dto.unit,
                 )

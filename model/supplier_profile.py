@@ -51,7 +51,6 @@ class SupplierProfile(Base):
                                                  comment="更新时间")
 
 
-
 class SupplierProfileDto(BaseModel):
     """供应商画像数据类."""
 

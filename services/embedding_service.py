@@ -11,41 +11,34 @@
     vec = EmbeddingService.get_notice_embedding(notice)
     score = EmbeddingService.cosine_similarity(vec_a, vec_b)
 """
-import json
-from typing import Any, List, Optional
+from typing import Any, List
 
 from loguru import logger
 import numpy as np
-
+from openai import OpenAI
 from config import config
 
 
 class EmbeddingService:
     """Embedding 语义向量服务（类级单例，无需实例化）."""
-
-    _client = None
-    _model = None
+    client = OpenAI(
+        api_key=config.get("embedding.api_key"),
+        base_url=config.get("embedding.base_url")
+    )
+    model = config.get("embedding.model")
 
     @classmethod
-    def _ensure_initialized(cls) -> None:
-        """读取配置并创建 Ark 客户端（类级单例，仅首次调用时执行）."""
-        if cls._client is not None:
-            return
-
-        api_key = config.get("llm.api_key")
-        if not api_key:
-            raise ValueError("缺少 LLM API 密钥配置 (llm.api_key)")
-
-        # 复用 llm_parser 中的 Ark 客户端初始化方式
-        from volcenginesdkarkruntime import Ark
-        cls._client = Ark(base_url=config.get("llm.base_url"), api_key=api_key)
-        cls._model = config.get("embedding.model") or config.get("llm.model")
-        if not cls._model:
-            raise ValueError("缺少 Embedding 模型配置 (embedding.model)")
-
-    # -------------------------------------------------------------------------
-    # 文本构建
-    # -------------------------------------------------------------------------
+    def embed(cls, text: str) -> list[float] | None:
+        """调用 Embedding API 获取向量."""
+        try:
+            response = cls.client.embeddings.create(
+                model=cls.model,
+                input=text,
+            )
+            return response.data[0].embedding
+        except Exception as e:
+            logger.error(f"[Embedding失败] {e}")
+            return None
 
     @staticmethod
     def build_supplier_text(supplier: Any) -> str:
@@ -76,79 +69,17 @@ class EmbeddingService:
         return "。".join(parts)
 
     # -------------------------------------------------------------------------
-    # Embedding API 调用
-    # -------------------------------------------------------------------------
-
-    @classmethod
-    def embed(cls, text: str) -> Optional[List[float]]:
-        """调用 Embedding API 获取向量.
-
-        Args:
-            text: 输入文本
-
-        Returns:
-            向量列表（如 1536 维），失败返回 None
-        """
-        if not text or not text.strip():
-            return None
-
-        cls._ensure_initialized()
-        try:
-            response = cls._client.embeddings.create(
-                model=cls._model,
-                input=text,
-            )
-            return response.data[0].embedding
-        except Exception as e:
-            logger.error(f"[Embedding失败] {e}")
-            return None
-
-    @classmethod
-    def embed_batch(cls, texts: List[str]) -> List[Optional[List[float]]]:
-        """批量调用 Embedding API.
-
-        Args:
-            texts: 文本列表
-
-        Returns:
-            向量列表，与输入一一对应，失败的位置为 None
-        """
-        if not texts:
-            return []
-
-        cls._ensure_initialized()
-        # 过滤空文本，但保持位置对应
-        valid_indices = [i for i, t in enumerate(texts) if t and t.strip()]
-        valid_texts = [texts[i] for i in valid_indices]
-
-        if not valid_texts:
-            return [None] * len(texts)
-
-        try:
-            response = cls._client.embeddings.create(
-                model=cls._model,
-                input=valid_texts,
-            )
-            results = [None] * len(texts)
-            for idx, data in zip(valid_indices, response.data):
-                results[idx] = data.embedding
-            return results
-        except Exception as e:
-            logger.error(f"[Embedding批量失败] {e}")
-            return [None] * len(texts)
-
-    # -------------------------------------------------------------------------
     # 便捷方法：直接传入模型对象
     # -------------------------------------------------------------------------
 
     @classmethod
-    def get_supplier_embedding(cls, supplier: Any) -> Optional[List[float]]:
+    def get_supplier_embedding(cls, supplier: Any) -> list[float] | None:
         """获取供应商画像的 Embedding 向量."""
         text = cls.build_supplier_text(supplier)
         return cls.embed(text)
 
     @classmethod
-    def get_notice_embedding(cls, notice: Any) -> Optional[List[float]]:
+    def get_notice_embedding(cls, notice: Any) -> list[float] | None:
         """获取招标公告的 Embedding 向量."""
         text = cls.build_notice_text(notice)
         return cls.embed(text)
@@ -156,7 +87,6 @@ class EmbeddingService:
     # -------------------------------------------------------------------------
     # 相似度计算
     # -------------------------------------------------------------------------
-
     @staticmethod
     def cosine_similarity(a: List[float], b: List[float]) -> float:
         """计算两个向量的余弦相似度.
@@ -180,9 +110,9 @@ class EmbeddingService:
 
     @staticmethod
     def similarity_matrix(
-        query_vec: List[float],
-        candidate_vecs: List[List[float]],
-    ) -> List[float]:
+            query_vec: list[float],
+            candidate_vecs: list[list[float]],
+    ) -> list[float]:
         """计算一个 query 向量与多个候选向量的相似度（批量矩阵运算）.
 
         Args:
