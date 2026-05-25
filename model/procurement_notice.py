@@ -6,8 +6,8 @@ from decimal import Decimal
 from typing import Optional
 from model import Base, _DEFAULT_DATETIME
 
-from pydantic import BaseModel, Field
-from sqlalchemy import BigInteger, DECIMAL, DateTime, JSON, String, Text
+from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import BigInteger, DECIMAL, DateTime, JSON, LargeBinary, String, Text
 from sqlalchemy.dialects.mysql import TINYINT
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -40,11 +40,6 @@ class ProcurementNotice(Base):
     budget: Mapped[Decimal] = mapped_column(DECIMAL(15, 2), default=Decimal("0.00"), comment="采购预算金额")
     currency: Mapped[str] = mapped_column(String(8), default="CNY", comment="币种")
 
-    # === 品目 ===
-    category_code: Mapped[str] = mapped_column(String(32), default="", comment="采购品目编号")
-    category_name: Mapped[str] = mapped_column(String(128), default="", comment="采购品目名称")
-    category_embedding: Mapped[Optional[list]] = mapped_column(JSON, default=list[int], comment="采购商品语义向量")
-
     # === 采购方式 ===
     method: Mapped[str] = mapped_column(String(32), default="", comment="采购方式")
     joint_bid_allowed: Mapped[int] = mapped_column(TINYINT, default=0, comment="是否允许联合投标")
@@ -72,26 +67,22 @@ class ProcurementNotice(Base):
     purchaser_address: Mapped[str] = mapped_column(String(256), default="", comment="采购方地址")
     purchaser_contact_person: Mapped[str] = mapped_column(String(64), default="", comment="采购方联系人")
     purchaser_contact_phone: Mapped[str] = mapped_column(String(32), default="", comment="采购方联系电话")
-    purchaser_region: Mapped[str] = mapped_column(String(64), default="", comment="采购方所在地")
-
     # === 代理机构信息 ===
     agency_name: Mapped[str] = mapped_column(String(128), default="", comment="代理机构名称")
     agency_address: Mapped[str] = mapped_column(String(256), default="", comment="代理机构地址")
     agency_contact_person: Mapped[str] = mapped_column(String(64), default="", comment="代理机构联系人")
     agency_contact_phone: Mapped[str] = mapped_column(String(32), default="",
                                                       comment="代理机构联系电话")
-    agency_region: Mapped[str] = mapped_column(String(64), default="", comment="代理机构所在地")
-
     # === 项目联系人 ===
     project_contact_person: Mapped[str] = mapped_column(String(64), default="", comment="采购项目联系人")
     project_contact_phone: Mapped[str] = mapped_column(String(32), default="", comment="采购项目联系电话")
 
     # === 匹配特征 ===
     qualification_summary: Mapped[Optional[str]] = mapped_column(Text, comment="投标所需资质")
-    industry_tags: Mapped[Optional[list]] = mapped_column(JSON, default=list, comment="行业标签")
-    keywords: Mapped[Optional[list]] = mapped_column(JSON, default=list, comment="公告关键字")
-    suggested_company_types: Mapped[Optional[list]] = mapped_column(JSON, default=list, comment="建议的企业类型")
-    geographic_advantage: Mapped[str] = mapped_column(String(32), default="", comment="地理优势")
+    industry_tags: Mapped[list[str]] = mapped_column(JSON, comment="行业标签")
+    supplier_profile: Mapped[str] = mapped_column(String(512), comment="所需供应商画像文本")
+    supplier_profile_embedding: Mapped[Optional[bytes]] = mapped_column(LargeBinary,
+                                                                        comment="所需供应商画像语义向量（BLOB存储）")
 
     # === 原始摘要 ===
     abstract: Mapped[Optional[str]] = mapped_column(Text, default="", comment="公告摘要")
@@ -122,9 +113,6 @@ class ProcurementNoticeDto(BaseModel):
     purchase_plan_no: str = ""
     budget: Decimal = Decimal("0.00")
     currency: str = "CNY"
-    category_code: str = ""
-    category_name: str = ""
-    category_embedding: Optional[list] = None
     method: str = ""
     joint_bid_allowed: int = 0
     joint_bid_max_members: int = 0
@@ -142,20 +130,17 @@ class ProcurementNoticeDto(BaseModel):
     purchaser_address: str = ""
     purchaser_contact_person: str = ""
     purchaser_contact_phone: str = ""
-    purchaser_region: str = ""
     agency_name: str = ""
     agency_address: str = ""
     agency_contact_person: str = ""
     agency_contact_phone: str = ""
-    agency_region: str = ""
     project_contact_person: str = ""
     project_contact_phone: str = ""
-    qualification_summary: Optional[str] = None
-    industry_tags: Optional[list] = None
-    keywords: Optional[list] = None
-    suggested_company_types: Optional[list] = None
-    geographic_advantage: str = ""
-    abstract: Optional[str] = ""
+    qualification_summary: str = ''
+    industry_tags: list[str] = []
+    abstract: str = ""
+    supplier_profile: str = ''
+    supplier_profile_embedding: bytes | None = None
     html: Optional[str] = ""
     parse_time: datetime = Field(default_factory=datetime.now)
     status: int = 1

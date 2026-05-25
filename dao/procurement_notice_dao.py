@@ -2,15 +2,11 @@
 
 from datetime import datetime
 from typing import List, Optional
-
 from loguru import logger
-
 from sqlalchemy import func, select
 from sqlalchemy.dialects.mysql import insert
-
 from model import ProcurementNotice
 from model.procurement_notice import ProcurementNoticeDto
-
 from dao import db, orm_to_dto
 
 
@@ -30,7 +26,7 @@ class ProcurementNoticeDao:
     # 批量保存（INSERT ... ON DUPLICATE KEY UPDATE）
     # -----------------------------------------------------------------------
     @staticmethod
-    def save(notices: list[ProcurementNoticeDto]) -> bool:
+    def create(notices: list[ProcurementNoticeDto]) -> bool:
         """批量保存公告，自动去重（基于 URL）并更新已存在记录"""
         datas = [notice.model_dump(exclude={"id", "created_at", "updated_at"}) for notice in notices]
         with db.begin() as session:
@@ -40,16 +36,16 @@ class ProcurementNoticeDao:
         return True
 
     # -----------------------------------------------------------------------
-    # Embedding 更新
+    # Embedding 更新（supplier_profile_embedding BLOB 字段）
     # -----------------------------------------------------------------------
     @staticmethod
-    def update_embedding(notice_id: int, embedding: list) -> bool:
-        """更新公告的 Embedding 向量."""
+    def update_supplier_profile_embedding(notice_id: int, embedding: bytes) -> bool:
+        """更新公告的 supplier_profile_embedding 向量（BLOB 存储）."""
         with db.begin() as session:
             notice = session.get(ProcurementNotice, notice_id)
             if not notice:
                 return False
-            notice.category_embedding = embedding
+            notice.supplier_profile_embedding = embedding
             return True
 
     # -----------------------------------------------------------------------
@@ -169,27 +165,20 @@ class ProcurementNoticeDao:
     # -----------------------------------------------------------------------
     @staticmethod
     def update_parsed(dto: ProcurementNoticeDto) -> bool:
-        """更新 LLM 解析后的详情字段，并将状态推进到 30.
-
-        Args:
-            dto: 已填充解析结果的 ProcurementNoticeDto 实例（必须包含 id）
-
-        Returns:
-            是否更新成功
-        """
+        """更新 LLM 解析后的详情字段，并将状态推进到 30"""
         if not dto.id:
             logger.error("[ProcurementNoticeDao] update_parsed 失败: dto.id 为空")
             return False
 
         with db.begin() as session:
-            existing = session.get(ProcurementNotice, dto.id)
-            if not existing:
+            notice = session.get(ProcurementNotice, dto.id)
+            if not notice:
                 logger.error(f"[ProcurementNoticeDao] update_parsed 失败: id={dto.id} 不存在")
                 return False
 
             for key, value in dto.model_dump(exclude={"id", "created_at"}).items():
-                setattr(existing, key, value)
+                setattr(notice, key, value)
 
-            existing.status = 30
-            existing.updated_at = datetime.now()
+            notice.status = 30
+            notice.updated_at = datetime.now()
             return True

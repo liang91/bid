@@ -15,21 +15,13 @@ from dao import (
     NoticePackageDao,
     NoticeQualificationDao,
 )
-from model import _DEFAULT_DATETIME
 from model.procurement_notice import ProcurementNoticeDto
 from model.notice_attachment import NoticeAttachmentDto
 from model.notice_package import NoticePackageDto
 from model.notice_qualification import NoticeQualificationDto
-from .llm_parser import LLMParser
-from .parser_utils import (
-    parse_amount,
-    parse_chinese_datetime,
-    standardize_publish_time,
-    strip_html_noise,
-    extract_region,
-    parse_time_range,
-    parse_purchaser_contact_person,
-)
+from crawlers.llm_parser import LLMParser
+from crawlers.parser_utils import strip_html_noise
+
 from services.embedding_service import EmbeddingService
 
 DEFAULT_HEADERS = {
@@ -67,35 +59,35 @@ class CCGPCrawler:
     }
 
     PROMPT = """你是一个专业的政府采购网招标公告信息提取助手，你的任务是从给定的政府采购公告页HTML中，提取关键的招标信息。
-需要提取的字段如下（字段名必须严格与下面列出的英文名称一致；如果文本中确实没有该信息，请返回 null，不要编造）：
+需要提取的字段如下（字段名必须严格与下面列出的英文名称一致；如果文本中确实没有该信息，不要编造）：
     
 - project_name: 采购项目名称
 - project_no: 项目编号（如"JXHCGC2026-GZ-J006"）
 - purchase_plan_no: 采购计划编号
-- category_name: 采购品目名称（如"货物/通用设备/计算机设备及软件/计算机网络设备"）
 - method: 采购方式（如"公开招标"、"竞争性谈判"、"询价"、"单一来源"）
-- budget: 预算金额（统一换算成元，格式：123.11，最多保留两位非0小数，如果都是0，不保留小数）
+- budget: 预算金额
 - currency: 币种，默认为"CNY"
+- joint_bid_allowed: 是否允许联合投标: 0-不允许 1-允许 整数类型，默认值：0
+- join_bid_max_members: 联合投标最多参与方数量，整数类型，默认值：1
+- sme_oriented: 是否专门面向中小企业: 0-不是 1-是，整数类型，默认值：0
 
-- region_province: 采购方所在省份（如"江西省"、"北京市"）
-- region_city: 采购方所在城市（如"赣州市"、"成都市"），
-- region_district: 采购方所在区/县（如"青羊区"、"铜官区"），如果是县级市则填县级市名称
+- region_province: 采购方所在省份 如:"江西"、"北京"、"香港","新疆"（省级自治区用省名，比如：新疆维吾尔自治区对应新疆）
+- region_city: 采购方所在城市 如:"赣州"、"成都"，
+- region_district: 采购方所在区/县（如:"新安县","青羊区"、"铜官区"），如果是县级市则填县级市名称
 
 - notice_date: 公告发布时间，严格格式化为 YYYY-MM-DD HH:MM（如"2026-05-15 16:55"），如果只到日期则输出 YYYY-MM-DD
-- doc_obtain_start: 采购文件获取开始时间，格式 YYYY-MM-DD HH:MM。如果公告中给出的是时间范围文本（如"2026年05月17日至2026年05月24日"），可将整段文本填入此字段
+- doc_obtain_start: 采购文件获取开始时间，格式 YYYY-MM-DD HH:MM
 - doc_obtain_end: 采购文件获取截止时间，格式 YYYY-MM-DD HH:MM
 - bid_deadline: 投标截止时间/响应文件提交截止时间，格式 YYYY-MM-DD HH:MM
 - bid_open_time: 开标时间，格式 YYYY-MM-DD HH:MM
 
 - bid_platform: 投标平台/开标地点/获取招标文件的地点
-- doc_price: 招标文件/采购文件售价，统一换算成元，格式:123.12（最多保留两位小数，如果都是0，不保留小数）
+- doc_price: 招标文件费用
 
 - purchaser_name: 采购人名称
 - purchaser_address: 采购人地址
 - purchaser_contact_person: 采购人联系人姓名
 - purchaser_contact_phone: 采购人联系电话
-- purchaser_region: 采购人所在行政区域（如"北京市"、"杭州市西湖区"）
-
 - agency_name: 代理机构名称
 - agency_address: 代理机构地址
 - agency_contact_person: 代理机构联系人姓名
@@ -104,8 +96,16 @@ class CCGPCrawler:
 - project_contact_person: 项目联系人姓名
 - project_contact_phone: 项目联系电话
 
-- abstract: 正文内容摘要（300字以内，概括项目主要内容、要求、关键词，这个字段用于建全文索引）
-- qualification_summary: 资质要求摘要
+- qualification_summary: 申请方/供应商资质要求摘要
+- industry_tags: [
+    "行业大类标签",
+    "行业细分标签1",
+    "行业细分标签2",
+    "行业细分标签3"
+] 所需供应商的行业标签（字符串列表类型）
+
+- abstract: 公告内容摘要，500字以内
+- supplier_profile: 所需供应商的画像，要包含：供应商需要在哪些行业（行业大类标签、行业细分标签）、所需的资质/证书、供应商要具备能力等，300字以内，备注：这个字段会用于和供应商信息做语义匹配，用于筛选符合招标要求的供应商
 
 - notice_attachments: [ 
     {
@@ -116,11 +116,11 @@ class CCGPCrawler:
 
 - notice_packages: [
     {
-        no: 采购包编号
+        no: 采购包编号,
         name: 采购包名称,
-        budge: 包预算（统一换算成元，格式：123.11，保留两位非0小数，如果都是0不保留小数）,
-        quantity: 采购数量,
-        unit: 货品单位,
+        budget: 包预算,
+        quantity: 采购数量(字符串类型，默认值是空字符串),
+        unit: 货品单位(字符串类型，默认值是空字符串),
         intro: 标项规格描述或概况介绍
     }
 ] 采购包列表
@@ -128,19 +128,16 @@ class CCGPCrawler:
 - notice_qualifications: [
     {
         qualification_type: 资质类型,
-        name: 资质/证书名称,
-        required_scope: 要求范围/等级,
-        valid_required: 是否要求有效期内,
-        evidence_type: 证明材料类型,
-        joint_bid_acceptable: 联合体是否可接受
+        name: 资质/证书名称
     }
-] 资质要求列表
+] 供应商/申请方资质要求列表
 
 返回格式要求：
 1. 只返回纯 JSON 对象，不要包含 markdown 代码块标记（如 ```json）
 2. 不要添加任何解释性文字
 3. 所有字段名必须严格使用上面列出的英文名称
 4. 字符串值保持原文，不要翻译或改写
+5. 预算或费用金额统一换算成元，字符串格式，最多保留两位非0小数，如果都是0，不保留小数位
 
 你要解析的公告页HTML内容如下：
 
@@ -151,7 +148,6 @@ class CCGPCrawler:
             part: str = "dfgg",
             delay: float = 1.0,
             max_retries: int = 3,
-            timeout: int = 30,
     ):
         if part not in self.PARTS:
             raise ValueError(f"不支持的栏目: {part}，可选: {list(self.PARTS.keys())}")
@@ -161,7 +157,6 @@ class CCGPCrawler:
         self.list_base_url = urljoin(self.BASE_URL, self.part_path)
         self.delay = delay
         self.max_retries = max_retries
-        self.timeout = timeout
         self._seen_urls = set()
         self.session = requests.Session()
         self.session.headers.update(DEFAULT_HEADERS)
@@ -169,7 +164,7 @@ class CCGPCrawler:
     def _get(self, url: str) -> Optional[str]:
         for attempt in range(1, self.max_retries + 1):
             try:
-                resp = self.session.get(url, timeout=self.timeout)
+                resp = self.session.get(url, timeout=30)
                 resp.encoding = resp.apparent_encoding or "utf-8"
                 if resp.status_code == 200:
                     return resp.text
@@ -210,8 +205,6 @@ class CCGPCrawler:
                 dto.notice_type = em_type.get_text(strip=True)
 
             li_text = li.get_text(separator=" ", strip=True)
-            if m := re.search(r"发布时间[：:]\s*([\d\-]{10}\s+\d{2}:\d{2})", li_text):
-                dto.notice_date = parse_chinese_datetime(m.group(1).strip()) or _DEFAULT_DATETIME
             if m := re.search(r"地域[：:]\s*([^\s]+?)(?:\s+采购人|$)", li_text):
                 dto.region_province = m.group(1).strip()
             if m := re.search(r"采购人[：:]\s*(.+)$", li_text):
@@ -220,74 +213,6 @@ class CCGPCrawler:
             notices.append(dto)
 
         return notices
-
-    # -------------------------------------------------------------------------
-    # 数据清洗辅助
-    # -------------------------------------------------------------------------
-
-    @staticmethod
-    def _clean_notice_field(key: str, value):
-        """将 LLM 或爬虫原始值清洗为 DTO 字段对应类型."""
-        if value is None or value == "":
-            return None
-        if key in ("budget", "doc_price"):
-            return parse_amount(str(value)) or Decimal("0.00")
-        if key in ("notice_date", "doc_obtain_start", "doc_obtain_end", "bid_deadline", "bid_open_time"):
-            return parse_chinese_datetime(str(value)) or _DEFAULT_DATETIME
-        if key in ("joint_bid_allowed", "joint_bid_max_members", "sme_oriented", "ca_required", "status"):
-            try:
-                return int(value)
-            except (TypeError, ValueError):
-                return 0
-        if isinstance(value, str):
-            return value.strip()
-        return value
-
-    @staticmethod
-    def _build_attachment_dtos(raw_list: list) -> List[NoticeAttachmentDto]:
-        result = []
-        for item in raw_list:
-            if not isinstance(item, dict):
-                continue
-            result.append(NoticeAttachmentDto(
-                name=str(item.get("name") or "")[:256],
-                url=str(item.get("url") or "")[:512],
-            ))
-        return result
-
-    @staticmethod
-    def _build_package_dtos(raw_list: list) -> List[NoticePackageDto]:
-        result = []
-        for item in raw_list:
-            if not isinstance(item, dict):
-                continue
-            result.append(NoticePackageDto(
-                no=str(item.get("no") or "")[:16],
-                name=str(item.get("name") or "")[:256],
-                budget=parse_amount(str(item.get("budge") or item.get("budget") or "")) or Decimal("0.00"),
-                quantity=Decimal(str(item.get("quantity") or "0").replace(",", "")) if item.get(
-                    "quantity") else Decimal("0.0000"),
-                unit=str(item.get("unit") or "")[:32],
-            ))
-        return result
-
-    @staticmethod
-    def _build_qualification_dtos(raw_list: list) -> List[NoticeQualificationDto]:
-        from .parser_utils import to_tinyint
-        result = []
-        for idx, item in enumerate(raw_list):
-            if not isinstance(item, dict):
-                continue
-            result.append(NoticeQualificationDto(
-                qualification_type=str(item.get("qualification_type") or "")[:32],
-                name=str(item.get("name") or "")[:128],
-                required_scope=str(item.get("required_scope") or "")[:256],
-                valid_required=to_tinyint(item.get("valid_required")),
-                evidence_type=str(item.get("evidence_type") or "")[:64],
-                joint_bid_acceptable=to_tinyint(item.get("joint_bid_acceptable")),
-                sort_order=idx,
-            ))
-        return result
 
     # -------------------------------------------------------------------------
     # 平台相关：HTML 清理
@@ -343,47 +268,6 @@ class CCGPCrawler:
 
         return result
 
-    # -------------------------------------------------------------------------
-    # 平台相关：LLM 结果填充与后处理
-    # -------------------------------------------------------------------------
-
-    @staticmethod
-    def _enrich_notice(dto: ProcurementNoticeDto) -> None:
-        """从已有字段中提取并标准化各类信息."""
-        # 省市区
-        dto.region_province, dto.region_city, dto.region_district = extract_region(
-            address=dto.purchaser_address,
-            region=dto.region_province,
-            administrative_region=dto.purchaser_region,
-        )
-
-        # 公告发布时间标准化
-        if dto.notice_date and dto.notice_date != _DEFAULT_DATETIME:
-            _std = standardize_publish_time(str(dto.notice_date))
-            if _std:
-                dto.notice_date = parse_chinese_datetime(_std) or dto.notice_date
-
-        # 采购方联系人
-        if not dto.purchaser_contact_person:
-            dto.purchaser_contact_person = parse_purchaser_contact_person(dto.abstract)
-
-        # 采购文件获取时间拆分
-        if dto.doc_obtain_start and dto.doc_obtain_start != _DEFAULT_DATETIME:
-            start_str = str(dto.doc_obtain_start)
-            if "至" in start_str or "到" in start_str:
-                start, end = parse_time_range(start_str)
-                if start:
-                    dto.doc_obtain_start = parse_chinese_datetime(start) or dto.doc_obtain_start
-                if end:
-                    dto.doc_obtain_end = parse_chinese_datetime(end) or dto.doc_obtain_end
-
-        # 投标截止时间 / 开标时间标准化
-        if dto.bid_open_time and dto.bid_open_time != _DEFAULT_DATETIME:
-            _std = standardize_publish_time(str(dto.bid_open_time))
-            if _std:
-                dto.bid_open_time = parse_chinese_datetime(_std) or dto.bid_open_time
-            if not dto.bid_deadline or dto.bid_deadline == _DEFAULT_DATETIME:
-                dto.bid_deadline = dto.bid_open_time
 
     @staticmethod
     def _is_tender_notice(dto: ProcurementNoticeDto) -> bool:
@@ -419,7 +303,7 @@ class CCGPCrawler:
             logger.info(f"[fetch_list] 排除非招标公告 {excluded} 条，保留 {len(tender_notices)} 条")
 
         if tender_notices:
-            ProcurementNoticeDao().save(tender_notices)
+            ProcurementNoticeDao.create(tender_notices)
             logger.info(f"[fetch_list] 入库完成: 新增 {len(tender_notices)} 条")
             return {
                 "crawled": len(all_notices),
@@ -431,9 +315,8 @@ class CCGPCrawler:
     # ========================================================================
     # 第2步：fetch_html
     # ========================================================================
-
     def fetch_html(self, limit: int = 100) -> dict:
-        notices = ProcurementNoticeDao().fetch_by_status(status=1, platform=self.PLATFORM, limit=limit)
+        notices = ProcurementNoticeDao.fetch_by_status(status=1, platform=self.PLATFORM, limit=limit)
         if not notices:
             logger.info("[fetch_html] 没有待获取 HTML 的记录")
             return {"total": 0, "success": 0, "failed": 0}
@@ -446,7 +329,7 @@ class CCGPCrawler:
             html = self._get(dto.url)
             if html:
                 filtered_html = strip_html_noise(html)
-                ok = ProcurementNoticeDao().update_html(dto.id, filtered_html)
+                ok = ProcurementNoticeDao.update_html(dto.id, filtered_html)
                 if ok:
                     success += 1
                     logger.info(f"[fetch_html] {idx}/{len(notices)} 成功: {dto.project_name[:40]}...")
@@ -463,9 +346,8 @@ class CCGPCrawler:
     # ========================================================================
     # 第3步：parse_detail
     # ========================================================================
-
     def parse_detail(self, limit: int = 100) -> dict:
-        notices = ProcurementNoticeDao().fetch_by_status(status=20, platform=self.PLATFORM, limit=limit)
+        notices = ProcurementNoticeDao.fetch_by_status(status=20, platform=self.PLATFORM, limit=limit)
         if not notices:
             logger.info("[parse_detail] 没有待解析的记录")
             return {"total": 0, "success": 0, "failed": 0}
@@ -473,51 +355,35 @@ class CCGPCrawler:
         logger.info(f"[parse_detail] 共 {len(notices)} 条待处理")
         success = failed = 0
 
-        for idx, dto in enumerate(notices, 1):
-            html = dto.html
+        for idx, notice in enumerate(notices, 1):
+            html = notice.html
             if not html:
                 logger.warning(f"[parse_detail] {idx}/{len(notices)} 跳过: 无HTML内容")
                 failed += 1
                 continue
 
             try:
-                cleaned_text = self._clean_html_for_llm(html)
-                llm_result = LLMParser.parse(CCGPCrawler.PROMPT + cleaned_text)
+                cleaned_html = self._clean_html_for_llm(html)
+                data = LLMParser.parse(CCGPCrawler.PROMPT + cleaned_html)
+                attachments = data.pop("notice_attachments", None) or []
+                packages = data.pop("notice_packages", None) or []
+                qualifications = data.pop("notice_qualifications", None) or []
 
-                sub_attachments = llm_result.pop("notice_attachments", None) or []
-                sub_packages = llm_result.pop("notice_packages", None) or []
-                sub_qualifications = llm_result.pop("notice_qualifications", None) or []
-
-                # 用清洗后的值更新 DTO
-                dto_dict = dto.model_dump()
-                for key, value in llm_result.items():
-                    if value is not None and value != "":
-                        dto_dict[key] = self._clean_notice_field(key, value)
-                dto = ProcurementNoticeDto(**dto_dict)
-
-                self._enrich_notice(dto)
-                dto.status = 30
-                ok = ProcurementNoticeDao().update_parsed(dto)
+                notice_dict = notice.model_dump()
+                notice_dict.update(data)
+                notice = ProcurementNoticeDto(**notice_dict)
+                notice.supplier_profile_embedding = EmbeddingService.embed(notice.supplier_profile, as_bytes=True)
+                ok = ProcurementNoticeDao.update_parsed(notice)
                 if ok:
-                    NoticeAttachmentDao().insert(dto.id, self._build_attachment_dtos(sub_attachments))
-                    NoticePackageDao().insert(dto.id, self._build_package_dtos(sub_packages))
-                    NoticeQualificationDao().insert(dto.id, self._build_qualification_dtos(sub_qualifications))
-
-                    try:
-                        embedding = EmbeddingService.get_notice_embedding(dto)
-                        if embedding:
-                            ProcurementNoticeDao().update_embedding(dto.id, embedding)
-                            logger.info(f"[parse_detail-embedding] {idx}/{len(notices)} 成功: id={dto.id}")
-                        else:
-                            logger.warning(f"[parse_detail-embedding] {idx}/{len(notices)} 返回空: id={dto.id}")
-                    except Exception as e:
-                        logger.warning(f"[parse_detail-embedding] {idx}/{len(notices)} 失败: id={dto.id}, {e}")
-
+                    NoticeAttachmentDao.insert(notice.id, [NoticeAttachmentDto(**attachment) for attachment in attachments])
+                    NoticePackageDao.insert(notice.id, [NoticePackageDto(**package) for package in packages])
+                    NoticeQualificationDao.insert(notice.id, [NoticeQualificationDto(**qualification) for qualification in
+                                                           qualifications])
                     success += 1
-                    logger.info(f"[parse_detail-llm] {idx}/{len(notices)} 成功: {dto.project_name[:40]}...")
+                    logger.info(f"[parse_detail-llm] {idx}/{len(notices)} 成功: {notice.project_name[:40]}...")
                 else:
                     failed += 1
-                    logger.error(f"[parse_detail] {idx}/{len(notices)} 更新DB失败: id={dto.id}")
+                    logger.error(f"[parse_detail] {idx}/{len(notices)} 更新DB失败: id={notice.id}")
             except Exception as e:
                 failed += 1
                 logger.error(f"[parse_detail] {idx}/{len(notices)} 解析失败: {e}")
@@ -530,7 +396,6 @@ class CCGPCrawler:
     # ========================================================================
     # 兼容方法：一键运行
     # ========================================================================
-
     def run(self, pages: Optional[int] = 1) -> dict:
         logger.info("=" * 60)
         logger.info(f"[run] 开始三步流程 - 栏目: {self.part}")

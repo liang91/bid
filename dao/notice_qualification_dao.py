@@ -36,11 +36,6 @@ class NoticeQualificationDao:
                     notice_id=notice_id,
                     qualification_type=dto.qualification_type,
                     name=dto.name,
-                    required_scope=dto.required_scope,
-                    valid_required=dto.valid_required,
-                    evidence_type=dto.evidence_type,
-                    joint_bid_acceptable=dto.joint_bid_acceptable,
-                    sort_order=dto.sort_order,
                 )
             )
 

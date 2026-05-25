@@ -11,7 +11,6 @@ from config import config
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.orm import declarative_base
 
 url = ("mysql+pymysql://{user}:{password}@{host}:{port}/{database}?charset={charset}".format(
     user=config.get("mysql.user"),
@@ -25,7 +24,7 @@ url = ("mysql+pymysql://{user}:{password}@{host}:{port}/{database}?charset={char
 engine = create_engine(url)
 
 if engine is None:
-    logger.fatal("init mysql failed")
+    logger.error("init mysql failed")
 else:
     logger.info("init mysql success")
 

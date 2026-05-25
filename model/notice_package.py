@@ -1,12 +1,11 @@
 """公告分包表."""
 
-from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 from model import Base
 
 from pydantic import BaseModel
-from sqlalchemy import BigInteger, DECIMAL, DateTime, ForeignKey, Index, String
+from sqlalchemy import BigInteger, DECIMAL, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 
@@ -19,7 +18,7 @@ class NoticePackage(Base):
     no: Mapped[str] = mapped_column(String(16), default="", comment="分包编号")
     name: Mapped[str] = mapped_column(String(256), default="", comment="分包名称")
     budget: Mapped[Decimal] = mapped_column(DECIMAL(15, 2), default=Decimal("0.00"), comment="预算金额")
-    quantity: Mapped[Decimal] = mapped_column(DECIMAL(15, 4), default=Decimal("0.0000"), comment="数量")
+    quantity: Mapped[str] = mapped_column(String(8), default="", comment="数量")
     unit: Mapped[str] = mapped_column(String(32), default="", comment="单位")
 
 
@@ -31,5 +30,5 @@ class NoticePackageDto(BaseModel):
     no: str = ""
     name: str = ""
     budget: Decimal = Decimal("0.00")
-    quantity: Decimal = Decimal("0.0000")
+    quantity: str = ""
     unit: str = ""

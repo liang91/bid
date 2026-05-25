@@ -32,7 +32,7 @@ def main():
     engine = MatchEngine()
 
     if args.supplier > 0:
-        supplier = SupplierProfileDao().get_by_id(args.supplier)
+        supplier = SupplierProfileDao.get_by_id(args.supplier)
         if not supplier:
             logger.error(f"供应商 {args.supplier} 不存在")
             sys.exit(1)
@@ -61,7 +61,7 @@ def main():
                     "score": round(score, 6),
                     "notice_id": notice.id,
                     "project_name": notice.project_name,
-                    "category_name": notice.category_name,
+
                     "region_province": notice.region_province,
                     "budget": str(notice.budget) if notice.budget else "",
                 }

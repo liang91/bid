@@ -20,6 +20,8 @@ from dao import (
     SupplierProfileDao,
     SupplierServiceRegionDao,
 )
+import numpy as np
+
 from services.embedding_service import EmbeddingService
 
 
@@ -95,13 +97,14 @@ class MatchEngine:
             )
             return []
 
-        # 收集有 embedding 的公告
+        # 收集有 embedding 的公告（supplier_profile_embedding 为 BLOB，需反序列化）
         notices_with_vec = []
         notice_vecs = []
         for notice in candidates:
-            if notice.category_embedding:
+            if notice.supplier_profile_embedding:
+                vec = np.frombuffer(notice.supplier_profile_embedding, dtype=np.float32).tolist()
                 notices_with_vec.append(notice)
-                notice_vecs.append(notice.category_embedding)
+                notice_vecs.append(vec)
 
         if not notices_with_vec:
             logger.warning(

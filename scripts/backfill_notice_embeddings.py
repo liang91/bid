@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""为存量已解析公告补算 Embedding 向量.
+"""为存量已解析公告补算 supplier_profile_embedding 向量.
 
 用法:
     python scripts/backfill_notice_embeddings.py [--batch 50]
 
 说明:
-    扫描 procurement_notices 表中 status=30 且 embedding 为空的记录，
+    扫描 procurement_notices 表中 status=30 且 supplier_profile_embedding 为空的记录，
     调用 Embedding API 计算向量并回写数据库。
 """
 import argparse
@@ -15,7 +15,7 @@ from loguru import logger
 
 sys.path.insert(0, ".")
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import select
 
 from config import load_config
 from dao import ProcurementNoticeDao
@@ -25,24 +25,22 @@ from services.embedding_service import EmbeddingService
 
 
 def main():
-    parser = argparse.ArgumentParser(description="补算公告 Embedding 向量")
+    parser = argparse.ArgumentParser(description="补算公告 supplier_profile_embedding 向量")
     parser.add_argument("--batch", type=int, default=50, help="每批处理条数")
     parser.add_argument("--limit", type=int, default=0, help="最大处理条数（0=无限制）")
     args = parser.parse_args()
 
     load_config()
-    dao = ProcurementNoticeDao()
 
-    # 查询待补算的公告（使用 ORM 方式）
+    # 查询待补算的公告（supplier_profile_embedding 为空且 supplier_profile 不为空）
     with db() as session:
         stmt = (
             select(ProcurementNotice.id)
             .where(
                 ProcurementNotice.status == 30,
-                or_(
-                    ProcurementNotice.category_embedding.is_(None),
-                    func.json_length(ProcurementNotice.category_embedding) == 0,
-                ),
+                ProcurementNotice.supplier_profile.isnot(None),
+                ProcurementNotice.supplier_profile != "",
+                ProcurementNotice.supplier_profile_embedding.is_(None),
             )
             .order_by(ProcurementNotice.id.desc())
         )
@@ -52,7 +50,7 @@ def main():
         notice_ids = [row[0] for row in result.all()]
 
     if not notice_ids:
-        logger.info("没有待补算 Embedding 的公告")
+        logger.info("没有待补算 supplier_profile_embedding 的公告")
         return
 
     logger.info(f"待补算公告共 {len(notice_ids)} 条")
@@ -61,19 +59,19 @@ def main():
     for i in range(0, len(notice_ids), args.batch):
         batch_ids = notice_ids[i : i + args.batch]
 
-        with session_scope() as session:
+        with db() as session:
             notices = session.execute(
                 select(ProcurementNotice).where(ProcurementNotice.id.in_(batch_ids))
             ).scalars().all()
 
         for notice in notices:
-            if not notice.project_name and not notice.title:
+            if not notice.supplier_profile:
                 skipped += 1
                 continue
             try:
-                embedding = EmbeddingService.get_notice_embedding(notice)
+                embedding = EmbeddingService.embed(notice.supplier_profile, as_bytes=True)
                 if embedding:
-                    dao.update_embedding(notice.id, embedding)
+                    ProcurementNoticeDao.update_supplier_profile_embedding(notice.id, embedding)
                     success += 1
                     logger.info(f"[backfill] id={notice.id} 成功")
                 else:

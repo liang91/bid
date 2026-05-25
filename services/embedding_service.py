@@ -15,30 +15,57 @@ from typing import Any, List
 
 from loguru import logger
 import numpy as np
-from openai import OpenAI
 from config import config
+import dashscope
 
 
 class EmbeddingService:
     """Embedding 语义向量服务（类级单例，无需实例化）."""
-    client = OpenAI(
-        api_key=config.get("embedding.api_key"),
-        base_url=config.get("embedding.base_url")
-    )
+    api_key = config.get("embedding.api_key")
     model = config.get("embedding.model")
 
     @classmethod
-    def embed(cls, text: str) -> list[float] | None:
-        """调用 Embedding API 获取向量."""
+    def embed(cls, text: str, text_type: str = 'document', as_bytes: bool = False) -> list[float] | bytes | None:
+        """调用 Embedding API 获取向量.
+
+        Args:
+            text: 待编码文本
+            text_type: 文本类型，document 或 query
+            as_bytes: 是否返回 numpy float32 字节流（用于 BLOB 存储）
+
+        Returns:
+            默认返回 float list；as_bytes=True 时返回 bytes
+        """
         try:
-            response = cls.client.embeddings.create(
+            resp = dashscope.TextEmbedding.call(
+                api_key=cls.api_key,
                 model=cls.model,
                 input=text,
+                dimension=512,
+                text_type=text_type,
             )
-            return response.data[0].embedding
+            vec = resp.output['embeddings'][0]['embedding']
+            if as_bytes:
+                import numpy as np
+                return np.array(vec, dtype=np.float32).tobytes()
+            return vec
         except Exception as e:
             logger.error(f"[Embedding失败] {e}")
             return None
+
+    @staticmethod
+    def build_notice_text(notice: Any) -> str:
+        """将招标公告拼接为一段自然语言文本，用于 Embedding."""
+        parts = [
+            f"项目名称：{notice.project_name or notice.title}",
+        ]
+        if notice.supplier_profile:
+            parts.append(f"所需供应商画像：{notice.supplier_profile}")
+        if notice.abstract:
+            parts.append(f"项目简介：{notice.abstract}")
+        if notice.qualification_summary:
+            parts.append(f"资质要求：{notice.qualification_summary}")
+        return "。".join(parts)
 
     @staticmethod
     def build_supplier_text(supplier: Any) -> str:
@@ -52,21 +79,7 @@ class EmbeddingService:
             parts.append(f"企业规模：{supplier.company_scale}")
         return "。".join(parts)
 
-    @staticmethod
-    def build_notice_text(notice: Any) -> str:
-        """将招标公告拼接为一段自然语言文本，用于 Embedding."""
-        keywords = "、".join(notice.keywords) if notice.keywords else ""
-        parts = [
-            f"项目名称：{notice.project_name or notice.title}",
-            f"采购品目：{notice.category_name}",
-        ]
-        if keywords:
-            parts.append(f"采购内容关键词：{keywords}")
-        if notice.abstract:
-            parts.append(f"项目简介：{notice.abstract}")
-        if notice.qualification_summary:
-            parts.append(f"资质要求：{notice.qualification_summary}")
-        return "。".join(parts)
+
 
     # -------------------------------------------------------------------------
     # 便捷方法：直接传入模型对象

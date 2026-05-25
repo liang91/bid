@@ -32,10 +32,6 @@ CREATE TABLE procurement_notices (
     purchase_plan_no VARCHAR(128) NOT NULL DEFAULT '' COMMENT '采购计划编号',
     budget DECIMAL(15,2) NOT NULL DEFAULT 0.00 COMMENT '预算金额',
     currency VARCHAR(8) NOT NULL DEFAULT 'CNY' COMMENT '币种',
-    category_code VARCHAR(32) NOT NULL DEFAULT '' COMMENT '采购品目编码',
-    category_name VARCHAR(128) NOT NULL DEFAULT '' COMMENT '采购品目名称',
-    category_embedding JSON COMMENT '所需服务品目的Embedding向量',
-
     -- 采购方式
     method VARCHAR(32) NOT NULL DEFAULT '' COMMENT '公开招标/竞争性谈判/询价/单一来源',
     joint_bid_allowed TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否接受联合体',
@@ -60,14 +56,11 @@ CREATE TABLE procurement_notices (
     purchaser_address VARCHAR(256) NOT NULL DEFAULT '' COMMENT '采购人地址',
     purchaser_contact_person VARCHAR(64) NOT NULL DEFAULT '' COMMENT '采购人联系人',
     purchaser_contact_phone VARCHAR(32) NOT NULL DEFAULT '' COMMENT '采购人联系电话',
-    purchaser_region VARCHAR(64) NOT NULL DEFAULT '' COMMENT '采购人地区',
-
     -- 代理机构信息
     agency_name VARCHAR(128) NOT NULL DEFAULT '' COMMENT '代理机构名称',
     agency_address VARCHAR(256) NOT NULL DEFAULT '' COMMENT '代理机构地址',
     agency_contact_person VARCHAR(64) NOT NULL DEFAULT '' COMMENT '代理机构联系人',
     agency_contact_phone VARCHAR(32) NOT NULL DEFAULT '' COMMENT '代理机构联系电话',
-    agency_region VARCHAR(64) NOT NULL DEFAULT '' COMMENT '代理机构地区',
 
     -- 项目联系人信息（独立字段，用于项目咨询）
     project_contact_person VARCHAR(64) NOT NULL DEFAULT '' COMMENT '项目联系人',
@@ -76,12 +69,11 @@ CREATE TABLE procurement_notices (
     -- 匹配特征
     qualification_summary TEXT COMMENT '资质要求摘要',
     industry_tags JSON COMMENT '行业标签',
-    keywords JSON COMMENT '关键词',
-    suggested_company_types JSON COMMENT '建议供应商类型',
-    geographic_advantage VARCHAR(32) NOT NULL DEFAULT '' COMMENT '地域优势',
 
     -- 原始摘要
     abstract TEXT COMMENT '原文摘要',
+    supplier_profile VARCHAR(512) COMMENT '所需供应商画像',
+    supplier_profile_embedding BLOB COMMENT '所需供应商画像语义向量',
     html MEDIUMTEXT COMMENT '详情页原始HTML内容',
     parse_time DATETIME NOT NULL DEFAULT '1970-01-01 00:00:00' COMMENT '解析时间',
 
@@ -96,7 +88,7 @@ CREATE TABLE procurement_notices (
     INDEX idx_region (region_province, region_city, region_district),
     INDEX idx_budget (budget),
     INDEX idx_method (method),
-    INDEX idx_category (category_code),
+
     INDEX idx_status (status),
     FULLTEXT INDEX ft_project_name (project_name),
     FULLTEXT INDEX ft_abstract (abstract)
@@ -110,11 +102,6 @@ CREATE TABLE notice_qualifications (
     notice_id BIGINT NOT NULL DEFAULT 0 COMMENT '关联公告ID',
     qualification_type VARCHAR(32) NOT NULL DEFAULT '' COMMENT '资质类型：资质许可/业绩要求/人员要求/设备要求/其他',
     name VARCHAR(128) NOT NULL DEFAULT '' COMMENT '资质名称',
-    required_scope VARCHAR(256) NOT NULL DEFAULT '' COMMENT '要求范围/等级',
-    valid_required TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否要求有效期内',
-    evidence_type VARCHAR(64) NOT NULL DEFAULT '' COMMENT '证明材料类型',
-    joint_bid_acceptable TINYINT(1) NOT NULL DEFAULT 0 COMMENT '联合体是否可接受',
-    sort_order INT NOT NULL DEFAULT 0 COMMENT '排序',
 
     INDEX idx_notice_qual (notice_id, qualification_type),
     INDEX idx_qual_name (name)
@@ -150,7 +137,7 @@ CREATE TABLE notice_packages (
     no VARCHAR(16) NOT NULL DEFAULT '' COMMENT '包号',
     name VARCHAR(256) NOT NULL DEFAULT '' COMMENT '包名称',
     budget DECIMAL(15,2) NOT NULL DEFAULT 0.00 COMMENT '包预算',
-    quantity DECIMAL(15,4) NOT NULL DEFAULT 0.0000 COMMENT '数量',
+    quantity VARCHAR(8) NOT NULL DEFAULT '' COMMENT '数量',
     unit VARCHAR(32) NOT NULL DEFAULT '' COMMENT '单位',
     intro VARCHAR(1024) NOT NULL DEFAULT '' COMMENT '标项规格描述或概况介绍',
 
