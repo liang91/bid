@@ -1,4 +1,5 @@
 """中国政府采购网爬虫实现."""
+import os
 import re
 import time
 from decimal import Decimal
@@ -7,7 +8,7 @@ from urllib.parse import urljoin
 
 from loguru import logger
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Comment
 
 from dao import (
     ProcurementNoticeDao,
@@ -20,7 +21,6 @@ from model.notice_attachment import NoticeAttachmentDto
 from model.notice_package import NoticePackageDto
 from model.notice_qualification import NoticeQualificationDto
 from crawlers.llm_parser import LLMParser
-from crawlers.parser_utils import strip_html_noise
 
 from services.embedding_service import EmbeddingService
 
@@ -204,70 +204,9 @@ class CCGPCrawler:
             if em_type := li.find("em", attrs={"rel": "bxlx"}):
                 dto.notice_type = em_type.get_text(strip=True)
 
-            li_text = li.get_text(separator=" ", strip=True)
-            if m := re.search(r"地域[：:]\s*([^\s]+?)(?:\s+采购人|$)", li_text):
-                dto.region_province = m.group(1).strip()
-            if m := re.search(r"采购人[：:]\s*(.+)$", li_text):
-                dto.purchaser_name = m.group(1).strip()
-
             notices.append(dto)
 
         return notices
-
-    # -------------------------------------------------------------------------
-    # 平台相关：HTML 清理
-    # -------------------------------------------------------------------------
-
-    @staticmethod
-    def _clean_html_for_llm(html: str) -> str:
-        soup = BeautifulSoup(html, "lxml")
-        _NOISE_CLASSES = re.compile(
-            r"header|footer|nav|menu|sidebar|breadcrumb|banner|advert|ad-|toolbar|modal|popup|dialog",
-            re.IGNORECASE,
-        )
-
-        tags_to_remove = []
-        for tag in soup.find_all(True):
-            if not tag.name or tag.attrs is None:
-                continue
-            classes = " ".join(tag.get("class", []))
-            tag_id = tag.get("id", "")
-            if _NOISE_CLASSES.search(classes) or _NOISE_CLASSES.search(tag_id):
-                if any(k in classes for k in ("vF_detail_header", "vF_detail_content", "vF_deail_maincontent")):
-                    continue
-                tags_to_remove.append(tag)
-        for tag in tags_to_remove:
-            tag.decompose()
-
-        main_blocks = []
-        selectors = [
-            ("div", {"class": "vF_detail_header"}),
-            ("div", {"class": "table"}),
-            ("div", {"class": "vF_detail_content"}),
-        ]
-        for tag_name, attrs in selectors:
-            block = soup.find(tag_name, attrs=attrs)
-            if block:
-                block.attrs = {}
-                for inner in block.find_all(True):
-                    if inner.name == "a":
-                        continue
-                    inner.attrs = {}
-                main_blocks.append(str(block))
-
-        if main_blocks:
-            result = "\n".join(main_blocks)
-        else:
-            body = soup.find("body")
-            root = body if body else soup
-            for tag in root.find_all(True):
-                if tag.name == "a":
-                    continue
-                tag.attrs = {}
-            result = str(root)
-
-        return result
-
 
     @staticmethod
     def _is_tender_notice(dto: ProcurementNoticeDto) -> bool:
@@ -280,6 +219,32 @@ class CCGPCrawler:
         if any(kw in nt for kw in exclude_keywords):
             return False
         return True
+
+    @staticmethod
+    def save_cleaned_html(html: str) -> str:
+        soup = BeautifulSoup(html, "lxml")
+        main = soup.find('div', class_='vF_deail_maincontent')
+        # 去掉js/css代码
+        for tag in main.find_all(['script', 'style']):
+            tag.decompose()
+        # 去掉评论
+        for comment in main.find_all(string=lambda text: isinstance(text, Comment)):
+            comment.extract()
+        # 去掉标签属性
+        for tag in main.find_all():
+            tag.attrs = {k: v for k, v in tag.attrs.items() if k == 'href'}
+        content = str(main)
+        content = content.replace("<span>", "").replace("</span>", "")
+        os.makedirs("html", exist_ok=True)
+        filename = f"html/{int(time.time() * 1000000)}.html"
+        with open(filename, "w", encoding="utf-8") as f:
+            f.write(content)
+        return filename
+
+    @staticmethod
+    def get_cleand_html(path: str) -> str:
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
 
     # ========================================================================
     # 第1步：fetch_list
@@ -324,21 +289,15 @@ class CCGPCrawler:
         logger.info(f"[fetch_html] 共 {len(notices)} 条待处理")
         success = failed = 0
 
-        for idx, dto in enumerate(notices, 1):
-            time.sleep(self.delay)
-            html = self._get(dto.url)
+        for notice in notices:
+            html = self._get(notice.url)
             if html:
-                filtered_html = strip_html_noise(html)
-                ok = ProcurementNoticeDao.update_html(dto.id, filtered_html)
-                if ok:
-                    success += 1
-                    logger.info(f"[fetch_html] {idx}/{len(notices)} 成功: {dto.project_name[:40]}...")
-                else:
-                    failed += 1
-                    logger.error(f"[fetch_html] {idx}/{len(notices)} 更新DB失败: {dto.url}")
+                html_path = self.save_cleaned_html(html)
+                ProcurementNoticeDao.update_html(notice.id, html_path)
+                success += 1
+                time.sleep(self.delay)
             else:
                 failed += 1
-                logger.error(f"[fetch_html] {idx}/{len(notices)} 请求失败: {dto.url}")
 
         logger.info(f"[fetch_html] 完成: 成功 {success} 条, 失败 {failed} 条")
         return {"total": len(notices), "success": success, "failed": failed}
@@ -356,18 +315,21 @@ class CCGPCrawler:
         success = failed = 0
 
         for idx, notice in enumerate(notices, 1):
-            html = notice.html
-            if not html:
+            if not notice.html:
                 logger.warning(f"[parse_detail] {idx}/{len(notices)} 跳过: 无HTML内容")
                 failed += 1
                 continue
 
             try:
-                cleaned_html = self._clean_html_for_llm(html)
-                data = LLMParser.parse(CCGPCrawler.PROMPT + cleaned_html)
+                data = LLMParser.parse(CCGPCrawler.PROMPT + self.get_cleand_html(notice.html))
                 attachments = data.pop("notice_attachments", None) or []
+                attachments = [NoticeAttachmentDto(**attachment) for attachment in attachments]
+
                 packages = data.pop("notice_packages", None) or []
+                packages = [NoticePackageDto(**package) for package in packages]
+
                 qualifications = data.pop("notice_qualifications", None) or []
+                qualifications = [NoticeQualificationDto(**qualification) for qualification in qualifications]
 
                 notice_dict = notice.model_dump()
                 notice_dict.update(data)
@@ -375,10 +337,9 @@ class CCGPCrawler:
                 notice.supplier_profile_embedding = EmbeddingService.embed(notice.supplier_profile, as_bytes=True)
                 ok = ProcurementNoticeDao.update_parsed(notice)
                 if ok:
-                    NoticeAttachmentDao.insert(notice.id, [NoticeAttachmentDto(**attachment) for attachment in attachments])
-                    NoticePackageDao.insert(notice.id, [NoticePackageDto(**package) for package in packages])
-                    NoticeQualificationDao.insert(notice.id, [NoticeQualificationDto(**qualification) for qualification in
-                                                           qualifications])
+                    NoticeAttachmentDao.insert(notice.id, attachments)
+                    NoticePackageDao.insert(notice.id, packages)
+                    NoticeQualificationDao.insert(notice.id, qualifications)
                     success += 1
                     logger.info(f"[parse_detail-llm] {idx}/{len(notices)} 成功: {notice.project_name[:40]}...")
                 else:

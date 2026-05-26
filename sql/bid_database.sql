@@ -74,7 +74,7 @@ CREATE TABLE procurement_notices (
     abstract TEXT COMMENT '原文摘要',
     supplier_profile VARCHAR(512) COMMENT '所需供应商画像',
     supplier_profile_embedding BLOB COMMENT '所需供应商画像语义向量',
-    html MEDIUMTEXT COMMENT '详情页原始HTML内容',
+    html VARCHAR(64) NOT NULL DEFAULT '' COMMENT 'html文件路径',
     parse_time DATETIME NOT NULL DEFAULT '1970-01-01 00:00:00' COMMENT '解析时间',
 
     -- 状态（爬取流程状态）

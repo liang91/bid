@@ -46,7 +46,6 @@ class EmbeddingService:
             )
             vec = resp.output['embeddings'][0]['embedding']
             if as_bytes:
-                import numpy as np
                 return np.array(vec, dtype=np.float32).tobytes()
             return vec
         except Exception as e:
@@ -78,8 +77,6 @@ class EmbeddingService:
         if supplier.company_scale:
             parts.append(f"企业规模：{supplier.company_scale}")
         return "。".join(parts)
-
-
 
     # -------------------------------------------------------------------------
     # 便捷方法：直接传入模型对象

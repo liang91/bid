@@ -85,8 +85,8 @@ class ProcurementNotice(Base):
                                                                         comment="所需供应商画像语义向量（BLOB存储）")
 
     # === 原始摘要 ===
-    abstract: Mapped[Optional[str]] = mapped_column(Text, default="", comment="公告摘要")
-    html: Mapped[Optional[str]] = mapped_column(Text, default="", comment="原始HTML内容")
+    abstract: Mapped[str] = mapped_column(Text, default="", comment="公告摘要")
+    html: Mapped[str] = mapped_column(String(64), default="", comment="html文件路径")
     parse_time: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, comment="解析时间")
 
     # === 状态 ===
@@ -141,7 +141,7 @@ class ProcurementNoticeDto(BaseModel):
     abstract: str = ""
     supplier_profile: str = ''
     supplier_profile_embedding: bytes | None = None
-    html: Optional[str] = ""
+    html: str = ''
     parse_time: datetime = Field(default_factory=datetime.now)
     status: int = 1
     created_at: datetime = Field(default_factory=datetime.now)

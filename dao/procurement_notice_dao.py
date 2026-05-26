@@ -150,7 +150,7 @@ class ProcurementNoticeDao:
     # -----------------------------------------------------------------------
     @staticmethod
     def update_html(notice_id: int, html: str) -> bool:
-        """更新详情页 HTML 内容，并将状态推进到 20."""
+        """保存html文件路径，并将状态推进到 20."""
         with db.begin() as session:
             notice = session.get(ProcurementNotice, notice_id)
             if not notice:
