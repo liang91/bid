@@ -2,15 +2,9 @@
 
 from typing import List
 
-from loguru import logger
-
 from sqlalchemy import delete
-
-from model import NoticeAttachment
-from model.notice_attachment import NoticeAttachmentDto
-
+from models import NoticeAttachment, NoticeAttachmentDto
 from dao import db
-
 
 
 class NoticeAttachmentDao:

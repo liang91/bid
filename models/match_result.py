@@ -3,7 +3,7 @@
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
-from model import Base, _DEFAULT_DATETIME
+from models import Base, _DEFAULT_DATETIME
 
 from pydantic import BaseModel, Field
 from sqlalchemy import BigInteger, DateTime, DECIMAL, Index, String, Text, UniqueConstraint

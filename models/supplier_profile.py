@@ -3,10 +3,10 @@
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
-from model import Base
+from models import Base
 
-from pydantic import BaseModel, Field
-from sqlalchemy import BigInteger, DateTime, DECIMAL, Index, JSON, String, Text
+from pydantic import BaseModel, Field, ConfigDict
+from sqlalchemy import Integer, BigInteger, DateTime, DECIMAL, LargeBinary, JSON, String, Text
 from sqlalchemy.dialects.mysql import TINYINT
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -29,10 +29,11 @@ class SupplierProfile(Base):
 
     # === 业务范围 ===
     business_scope: Mapped[Optional[str]] = mapped_column(Text, comment="业务范围")
-    business_embedding: Mapped[Optional[list]] = mapped_column(JSON, default=list, comment="业务语义向量")
+    service_regions: Mapped[list[str]] = mapped_column(JSON, default=[], comment="可服务地区列表")
+    profile_embedding: Mapped[Optional[bytes]] = mapped_column(LargeBinary, comment="供应商画像语义向量")
 
     # === 资质证书 ===
-    qualifications: Mapped[Optional[list]] = mapped_column(JSON, default=list, comment="资质证书列表")
+    qualifications: Mapped[Optional[list]] = mapped_column(JSON, default=[], comment="资质证书列表")
     qualification_summary: Mapped[str] = mapped_column(String(512), default="", comment="资质摘要")
 
     # === 需求偏好 ===
@@ -41,7 +42,7 @@ class SupplierProfile(Base):
     preferred_methods: Mapped[str] = mapped_column(String(128), default="", comment="偏好采购方式")
 
     # === 联合体 ===
-    joint_bid_willing: Mapped[int] = mapped_column(TINYINT, default=0, comment="是否愿意联合投标")
+    joint_bid_willing: Mapped[int] = mapped_column(Integer, default=0, comment="是否愿意联合投标")
 
     # === 排除项 ===
     excluded_keywords: Mapped[str] = mapped_column(String(256), default="", comment="排除关键词")
@@ -50,9 +51,14 @@ class SupplierProfile(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now,
                                                  comment="更新时间")
 
+class SupplierQualification(BaseModel):
+    name: str = ''
+    cert_no: str = ''
+    valid_until: str = ''
 
 class SupplierProfileDto(BaseModel):
     """供应商画像数据类."""
+    model_config = ConfigDict(from_attributes=True)
 
     id: Optional[int] = None
     company_name: str = ""
@@ -62,9 +68,10 @@ class SupplierProfileDto(BaseModel):
     district: str = ""
     sme_status: int = 0
     ca_ready: int = 0
-    business_scope: Optional[str] = None
-    business_embedding: Optional[list] = None
-    qualifications: Optional[list] = None
+    business_scope: str = ""
+    service_regions: list[str] = []
+    profile_embedding: bytes | None = None
+    qualifications: list[SupplierQualification] = []
     qualification_summary: str = ""
     min_budget: Decimal = Decimal("0.00")
     max_budget: Decimal = Decimal("999999999.99")

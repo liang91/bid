@@ -162,7 +162,8 @@ CREATE TABLE supplier_profiles (
 
     -- 业务范围（MVP精简：关键词文本，不用编码字典）
     business_scope TEXT COMMENT '业务范围关键词，逗号分隔，如：建筑设计,基因检测,软件开发,IT运维',
-    business_embedding JSON COMMENT '业务范围Embedding向量',
+    service_regions JSON COMMENT '可服务地区列表，如：["四川","广东"]',
+    profile_embedding JSON COMMENT '业务范围Embedding向量',
 
     -- 资质证书（JSON简化存储）
     qualifications JSON COMMENT '资质证书列表：[{name, cert_no, valid_until}]',

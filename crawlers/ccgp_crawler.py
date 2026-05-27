@@ -1,8 +1,6 @@
 """中国政府采购网爬虫实现."""
 import os
-import re
 import time
-from decimal import Decimal
 from typing import List, Optional
 from urllib.parse import urljoin
 
@@ -16,13 +14,8 @@ from dao import (
     NoticePackageDao,
     NoticeQualificationDao,
 )
-from model.procurement_notice import ProcurementNoticeDto
-from model.notice_attachment import NoticeAttachmentDto
-from model.notice_package import NoticePackageDto
-from model.notice_qualification import NoticeQualificationDto
-from crawlers.llm_parser import LLMParser
-
-from services.embedding_service import EmbeddingService
+from models import ProcurementNoticeDto, NoticeAttachmentDto, NoticePackageDto, NoticeQualificationDto
+from providers import LLMParser, LLMEmbedding
 
 DEFAULT_HEADERS = {
     "User-Agent": (
@@ -146,8 +139,6 @@ class CCGPCrawler:
     def __init__(
             self,
             part: str = "dfgg",
-            delay: float = 1.0,
-            max_retries: int = 3,
     ):
         if part not in self.PARTS:
             raise ValueError(f"不支持的栏目: {part}，可选: {list(self.PARTS.keys())}")
@@ -155,14 +146,11 @@ class CCGPCrawler:
         self.part = part
         self.part_path = self.PARTS[part]
         self.list_base_url = urljoin(self.BASE_URL, self.part_path)
-        self.delay = delay
-        self.max_retries = max_retries
-        self._seen_urls = set()
         self.session = requests.Session()
         self.session.headers.update(DEFAULT_HEADERS)
 
     def _get(self, url: str) -> Optional[str]:
-        for attempt in range(1, self.max_retries + 1):
+        for attempt in range(3):
             try:
                 resp = self.session.get(url, timeout=30)
                 resp.encoding = resp.apparent_encoding or "utf-8"
@@ -171,8 +159,6 @@ class CCGPCrawler:
                 logger.warning(f"[HTTP {resp.status_code}] {url}")
             except requests.RequestException as e:
                 logger.warning(f"[请求失败] 第{attempt}次尝试: {url} - {e}")
-                if attempt < self.max_retries:
-                    time.sleep(self.delay * attempt)
         return None
 
     def _build_list_url(self, page: int) -> str:
@@ -334,7 +320,7 @@ class CCGPCrawler:
                 notice_dict = notice.model_dump()
                 notice_dict.update(data)
                 notice = ProcurementNoticeDto(**notice_dict)
-                notice.supplier_profile_embedding = EmbeddingService.embed(notice.supplier_profile, as_bytes=True)
+                notice.supplier_profile_embedding = LLMEmbedding.embed(notice.supplier_profile, as_bytes=True)
                 ok = ProcurementNoticeDao.update_parsed(notice)
                 if ok:
                     NoticeAttachmentDao.insert(notice.id, attachments)
@@ -354,26 +340,3 @@ class CCGPCrawler:
         logger.info(f"[parse_detail] 完成: 成功 {success} 条, 失败 {failed} 条")
         return {"total": len(notices), "success": success, "failed": failed}
 
-    # ========================================================================
-    # 兼容方法：一键运行
-    # ========================================================================
-    def run(self, pages: Optional[int] = 1) -> dict:
-        logger.info("=" * 60)
-        logger.info(f"[run] 开始三步流程 - 栏目: {self.part}")
-        logger.info("=" * 60)
-
-        list_stats = self.fetch_list(pages=pages)
-        html_stats = self.fetch_html(limit=9999)
-        parse_stats = self.parse_detail(limit=9999)
-
-        logger.info("=" * 60)
-        logger.info("[run] 三步流程全部完成")
-        logger.info(f"  fetch_list : 插入 {list_stats.get('inserted', 0)} 条")
-        logger.info(f"  fetch_html : 成功 {html_stats.get('success', 0)} 条")
-        logger.info(f"  parse_detail: 成功 {parse_stats.get('success', 0)} 条")
-        logger.info("=" * 60)
-        return {
-            "fetch_list": list_stats,
-            "fetch_html": html_stats,
-            "parse_detail": parse_stats,
-        }

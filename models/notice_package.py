@@ -2,7 +2,7 @@
 
 from decimal import Decimal
 from typing import Optional
-from model import Base
+from models import Base
 
 from pydantic import BaseModel
 from sqlalchemy import BigInteger, DECIMAL, ForeignKey, String

@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from typing import Optional
-from model import Base
+from models import Base
 
 from pydantic import BaseModel, Field
 from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, String

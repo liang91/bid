@@ -6,10 +6,9 @@ from loguru import logger
 
 from sqlalchemy import delete, select
 
-from model import SupplierServiceRegion
+from models import SupplierServiceRegion
 
 from dao import db
-
 
 
 class SupplierServiceRegionDao:

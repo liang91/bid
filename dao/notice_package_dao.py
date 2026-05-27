@@ -2,11 +2,9 @@
 
 from typing import List
 
-from loguru import logger
 
 from sqlalchemy import delete
-from model import NoticePackage
-from model.notice_package import NoticePackageDto
+from models import NoticePackage, NoticePackageDto
 from dao import db
 
 

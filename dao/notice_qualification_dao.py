@@ -2,14 +2,10 @@
 
 from typing import List
 
-from loguru import logger
-
 from sqlalchemy import delete
-from model import NoticeQualification
-from model.notice_qualification import NoticeQualificationDto
+from models import NoticeQualification, NoticeQualificationDto
 
 from dao import db
-
 
 
 class NoticeQualificationDao:

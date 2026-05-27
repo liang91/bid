@@ -1,12 +1,11 @@
 """招标公告主表."""
 
-import json
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
-from model import Base, _DEFAULT_DATETIME
+from models import Base, _DEFAULT_DATETIME
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 from sqlalchemy import BigInteger, DECIMAL, DateTime, JSON, LargeBinary, String, Text
 from sqlalchemy.dialects.mysql import TINYINT
 from sqlalchemy.orm import Mapped, mapped_column

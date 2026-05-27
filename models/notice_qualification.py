@@ -1,7 +1,7 @@
 """公告资质要求表."""
 
 from typing import Optional
-from model import Base
+from models import Base
 
 from pydantic import BaseModel
 from sqlalchemy import BigInteger, ForeignKey, String

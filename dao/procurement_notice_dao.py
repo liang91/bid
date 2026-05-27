@@ -5,8 +5,7 @@ from typing import List, Optional
 from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.dialects.mysql import insert
-from model import ProcurementNotice
-from model.procurement_notice import ProcurementNoticeDto
+from models import ProcurementNotice, ProcurementNoticeDto
 from dao import db, orm_to_dto
 
 
@@ -56,16 +55,9 @@ class ProcurementNoticeDao:
             region_names: list,
             min_budget: float,
             max_budget: float,
-            preferred_methods: list,
-            excluded_keywords: list,
-            sme_status: int,
-            ca_ready: int,
-            limit: int = 2000,
-    ) -> List[ProcurementNoticeDto]:
+            limit: int = 25,
+    ) -> list[ProcurementNoticeDto]:
         """硬规则粗筛：根据地域、预算、采购方式、排除项、CA/中小企业、时效性筛选公告."""
-        if not region_names:
-            return []
-
         stmt = select(ProcurementNotice).where(
             ProcurementNotice.status == 30,
             ProcurementNotice.bid_deadline > func.now(),
@@ -73,27 +65,9 @@ class ProcurementNoticeDao:
             ProcurementNotice.budget >= min_budget,
             ProcurementNotice.budget <= max_budget,
         )
-
-        if preferred_methods:
-            stmt = stmt.where(ProcurementNotice.method.in_(preferred_methods))
-
-        for kw in excluded_keywords:
-            if kw.strip():
-                like_pattern = f"%{kw.strip()}%"
-                stmt = stmt.where(
-                    ProcurementNotice.title.not_like(like_pattern),
-                    ProcurementNotice.project_name.not_like(like_pattern),
-                    ProcurementNotice.abstract.not_like(like_pattern),
-                )
-
-        stmt = stmt.where(
-            (ProcurementNotice.sme_oriented == 0) | (sme_status == 1),
-            (ProcurementNotice.ca_required == 0) | (ca_ready == 1),
-        )
-
         stmt = stmt.order_by(ProcurementNotice.notice_date.desc()).limit(limit)
 
-        with db.begin() as session:
+        with db() as session:
             result = session.execute(stmt)
             return [orm_to_dto(row, ProcurementNoticeDto) for row in result.scalars().all()]
 
