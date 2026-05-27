@@ -1,8 +1,8 @@
 """数据访问对象包 —— SQLAlchemy 2.0 ORM 封装.
 
 使用方式：
-    from dao import ProcurementNoticeDao
-    dao = ProcurementNoticeDao()
+    from dao import NoticeDao
+    dao = NoticeDao()
     dao.insert_list(notice_list)
 """
 from loguru import logger
@@ -46,9 +46,9 @@ def orm_to_dto(orm_obj, dto_cls):
 
 
 # 导出各表 DAO 类
-from dao.procurement_notice_dao import ProcurementNoticeDao
+from dao.notice_dao import NoticeDao
 from dao.notice_attachment_dao import NoticeAttachmentDao
 from dao.notice_package_dao import NoticePackageDao
 from dao.notice_qualification_dao import NoticeQualificationDao
-from dao.supplier_profile_dao import SupplierProfileDao
+from dao.supplier_dao import SupplierDao
 from dao.supplier_service_region_dao import SupplierServiceRegionDao

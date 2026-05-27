@@ -21,11 +21,7 @@
     python main.py --step match --supplier 1001 --output result.json
 """
 import argparse
-import json
-import sys
-from loguru import logger
 from services import ClawerService, MatchService
-
 
 # ---------------------------------------------------------------------------
 # CLI 入口

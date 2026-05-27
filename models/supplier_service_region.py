@@ -13,7 +13,7 @@ class SupplierServiceRegion(Base):
     __tablename__ = "supplier_service_regions"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True, comment="主键ID")
-    supplier_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("supplier_profiles.id"), default=0,
+    supplier_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("supplier.id"), default=0,
                                              comment="供应商ID")
     region_name: Mapped[str] = mapped_column(String(32), default="", comment="地区名称")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, comment="创建时间")

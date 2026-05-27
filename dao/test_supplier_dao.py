@@ -1,14 +1,14 @@
 from decimal import Decimal
 
 from pydantic import TypeAdapter
-from dao import SupplierProfileDao
-from models import SupplierProfileDto, SupplierQualification
+from dao import SupplierDao
+from models import SupplierDto, SupplierQualification
 
 
-class TestSupplierProfileDao:
+class TestSupplierDao:
 
     def test_create(self):
-        dto = SupplierProfileDto(
+        dto = SupplierDto(
             company_name='北京行者明达科技有限公司',
             company_scale="小微",
             province="北京",
@@ -24,15 +24,15 @@ class TestSupplierProfileDao:
             max_budget=Decimal("1000000"),
             preferred_methods="公开招标",
         )
-        id = SupplierProfileDao.create(dto)
+        id = SupplierDao.create(dto)
         print(id)
 
     def test_get_by_id(self):
-        res = SupplierProfileDao.get_by_id(1)
+        res = SupplierDao.get_by_id(1)
         if res:
             print(res.model_dump_json())
 
     def test_list(self):
-        all = SupplierProfileDao.list_all()
-        adapter = TypeAdapter(list[SupplierProfileDto])
+        all = SupplierDao.list_all()
+        adapter = TypeAdapter(list[SupplierDto])
         print(adapter.dump_json(all).decode('utf-8'))

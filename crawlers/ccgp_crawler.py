@@ -9,12 +9,12 @@ import requests
 from bs4 import BeautifulSoup, Comment
 
 from dao import (
-    ProcurementNoticeDao,
+    NoticeDao,
     NoticeAttachmentDao,
     NoticePackageDao,
     NoticeQualificationDao,
 )
-from models import ProcurementNoticeDto, NoticeAttachmentDto, NoticePackageDto, NoticeQualificationDto
+from models import NoticeDto, NoticeAttachmentDto, NoticePackageDto, NoticeQualificationDto
 from providers import LLMParser, LLMEmbedding
 
 DEFAULT_HEADERS = {
@@ -166,7 +166,7 @@ class CCGPCrawler:
             return urljoin(self.list_base_url, "index.htm")
         return urljoin(self.list_base_url, f"index_{page}.htm")
 
-    def _parse_list_page(self, html: str, list_url: str) -> List[ProcurementNoticeDto]:
+    def _parse_list_page(self, html: str, list_url: str) -> List[NoticeDto]:
         """解析列表页，返回招标公告 DTO 列表."""
         notices = []
         soup = BeautifulSoup(html, "lxml")
@@ -180,7 +180,7 @@ class CCGPCrawler:
             if not a:
                 continue
 
-            dto = ProcurementNoticeDto(
+            dto = NoticeDto(
                 platform=self.PLATFORM,
                 part=self.PART_NAMES.get(self.part, ""),
                 title=a.get_text(strip=True),
@@ -195,7 +195,7 @@ class CCGPCrawler:
         return notices
 
     @staticmethod
-    def _is_tender_notice(dto: ProcurementNoticeDto) -> bool:
+    def _is_tender_notice(dto: NoticeDto) -> bool:
         if not dto.notice_type:
             return False
         nt = dto.notice_type.strip()
@@ -254,7 +254,7 @@ class CCGPCrawler:
             logger.info(f"[fetch_list] 排除非招标公告 {excluded} 条，保留 {len(tender_notices)} 条")
 
         if tender_notices:
-            ProcurementNoticeDao.create(tender_notices)
+            NoticeDao.create(tender_notices)
             logger.info(f"[fetch_list] 入库完成: 新增 {len(tender_notices)} 条")
             return {
                 "crawled": len(all_notices),
@@ -267,7 +267,7 @@ class CCGPCrawler:
     # 第2步：fetch_html
     # ========================================================================
     def fetch_html(self, limit: int = 100) -> dict:
-        notices = ProcurementNoticeDao.fetch_by_status(status=1, platform=self.PLATFORM, limit=limit)
+        notices = NoticeDao.fetch_by_status(status=1, platform=self.PLATFORM, limit=limit)
         if not notices:
             logger.info("[fetch_html] 没有待获取 HTML 的记录")
             return {"total": 0, "success": 0, "failed": 0}
@@ -279,7 +279,7 @@ class CCGPCrawler:
             html = self._get(notice.url)
             if html:
                 html_path = self.save_cleaned_html(html)
-                ProcurementNoticeDao.update_html(notice.id, html_path)
+                NoticeDao.update_html(notice.id, html_path)
                 success += 1
                 time.sleep(self.delay)
             else:
@@ -292,7 +292,7 @@ class CCGPCrawler:
     # 第3步：parse_detail
     # ========================================================================
     def parse_detail(self, limit: int = 100) -> dict:
-        notices = ProcurementNoticeDao.fetch_by_status(status=20, platform=self.PLATFORM, limit=limit)
+        notices = NoticeDao.fetch_by_status(status=20, platform=self.PLATFORM, limit=limit)
         if not notices:
             logger.info("[parse_detail] 没有待解析的记录")
             return {"total": 0, "success": 0, "failed": 0}
@@ -319,9 +319,9 @@ class CCGPCrawler:
 
                 notice_dict = notice.model_dump()
                 notice_dict.update(data)
-                notice = ProcurementNoticeDto(**notice_dict)
+                notice = NoticeDto(**notice_dict)
                 notice.supplier_profile_embedding = LLMEmbedding.embed(notice.supplier_profile, as_bytes=True)
-                ok = ProcurementNoticeDao.update_parsed(notice)
+                ok = NoticeDao.update_parsed(notice)
                 if ok:
                     NoticeAttachmentDao.insert(notice.id, attachments)
                     NoticePackageDao.insert(notice.id, packages)

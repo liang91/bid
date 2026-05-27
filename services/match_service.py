@@ -6,8 +6,8 @@
 3. 精筛（AI打分）：LLM 深度语义匹配，输出 Top3
 """
 from loguru import logger
-from models import ProcurementNoticeDto, ProcurementNotice
-from dao import ProcurementNoticeDao, SupplierProfileDao, db
+from models import NoticeDto, Notice
+from dao import NoticeDao, SupplierDao, db
 import numpy as np
 from sqlalchemy import select
 from providers import LLMEmbedding
@@ -17,16 +17,16 @@ class MatchService:
     """匹配引擎：封装粗筛 + 语义排序逻辑."""
 
     @staticmethod
-    def rank_for_supplier(supplier_id: int, top_k: int = 200) -> list[tuple[float, ProcurementNoticeDto]]:
+    def rank_for_supplier(supplier_id: int, top_k: int = 200) -> list[tuple[float, NoticeDto]]:
         """为单个供应商执行匹配：粗筛 → 语义排序"""
         # -------------------------------------------------------------------
         # 第1层：SQL硬规则粗筛
         # -------------------------------------------------------------------
-        supplier = SupplierProfileDao.get_by_id(supplier_id)
+        supplier = SupplierDao.get_by_id(supplier_id)
         if not supplier:
             return []
 
-        candidates = ProcurementNoticeDao.fetch_candidates_for_matching(
+        candidates = NoticeDao.fetch_candidates_for_matching(
             region_names=supplier.service_regions,
             min_budget=float(supplier.min_budget) if supplier.min_budget else 0,
             max_budget=float(supplier.max_budget) if supplier.max_budget else 999999999.99,
@@ -77,14 +77,14 @@ class MatchService:
     def run_backfill_notice(args):
         with db() as session:
             stmt = (
-                select(ProcurementNotice.id)
+                select(Notice.id)
                 .where(
-                    ProcurementNotice.status == 30,
-                    ProcurementNotice.supplier_profile.isnot(None),
-                    ProcurementNotice.supplier_profile != "",
-                    ProcurementNotice.supplier_profile_embedding.is_(None),
+                    Notice.status == 30,
+                    Notice.supplier_profile.isnot(None),
+                    Notice.supplier_profile != "",
+                    Notice.supplier_profile_embedding.is_(None),
                 )
-                .order_by(ProcurementNotice.id.desc())
+                .order_by(Notice.id.desc())
             )
             if args.limit > 0:
                 stmt = stmt.limit(args.limit)
@@ -103,7 +103,7 @@ class MatchService:
 
             with db() as session:
                 notices = session.execute(
-                    select(ProcurementNotice).where(ProcurementNotice.id.in_(batch_ids))
+                    select(Notice).where(Notice.id.in_(batch_ids))
                 ).scalars().all()
 
             for notice in notices:
@@ -113,7 +113,7 @@ class MatchService:
                 try:
                     embedding = LLMEmbedding.embed(notice.supplier_profile, as_bytes=True)
                     if embedding:
-                        ProcurementNoticeDao.update_supplier_profile_embedding(notice.id, embedding)
+                        NoticeDao.update_supplier_profile_embedding(notice.id, embedding)
                         success += 1
                         logger.info(f"[backfill] id={notice.id} 成功")
                     else:
@@ -130,7 +130,7 @@ class MatchService:
     # ---------------------------------------------------------------------------
     @staticmethod
     def run_backfill_supplier(args):
-        suppliers = SupplierProfileDao.list_all()
+        suppliers = SupplierDao.list_all()
         if not suppliers:
             logger.info("没有供应商记录")
             return
@@ -144,7 +144,7 @@ class MatchService:
             try:
                 embedding = LLMEmbedding.get_supplier_embedding(supplier)
                 if embedding:
-                    SupplierProfileDao.update_embedding(supplier.id, embedding)
+                    SupplierDao.update_embedding(supplier.id, embedding)
                     success += 1
                     logger.info(f"[backfill] supplier_id={supplier.id} {supplier.company_name} 成功")
                 else:

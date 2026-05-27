@@ -13,7 +13,7 @@ USE bid;
 -- ------------------------------------------------------------
 -- 主表: 招标公告主表
 -- ------------------------------------------------------------
-CREATE TABLE procurement_notices (
+CREATE TABLE notices (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     platform VARCHAR(64) NOT NULL DEFAULT '' COMMENT '平台：中国政府采购网',
     part VARCHAR(32) NOT NULL DEFAULT '' COMMENT '爬取栏目：中央公告/地方公告',
@@ -113,7 +113,7 @@ CREATE TABLE notice_qualifications (
 CREATE TABLE notice_attachments (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
     -- 关联信息
-    notice_id BIGINT NOT NULL DEFAULT 0 COMMENT '关联公告ID（对应 procurement_notices.id）',
+    notice_id BIGINT NOT NULL DEFAULT 0 COMMENT '关联公告ID（对应 notices.id）',
 
     -- 附件基本信息
     name VARCHAR(256) NOT NULL DEFAULT '' COMMENT '附件名称（如：招标文件、工程量清单、图纸等）',
@@ -145,9 +145,9 @@ CREATE TABLE notice_packages (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='招标公告分包信息';
 
 -- ------------------------------------------------------------
--- 供应商画像表 supplier_profiles
+-- 供应商画像表 supplier
 -- ------------------------------------------------------------
-CREATE TABLE supplier_profiles (
+CREATE TABLE supplier (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
 
     -- 公司基本信息
@@ -193,7 +193,7 @@ CREATE TABLE supplier_profiles (
 -- ------------------------------------------------------------
 CREATE TABLE supplier_service_regions (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    supplier_id BIGINT NOT NULL COMMENT '供应商ID，关联supplier_profiles.id',
+    supplier_id BIGINT NOT NULL COMMENT '供应商ID，关联supplier.id',
     region_name VARCHAR(32) NOT NULL DEFAULT '' COMMENT '可服务地区省份名称，如：四川、广东',
 
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -209,8 +209,8 @@ CREATE TABLE match_results (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
 
     -- 关联信息
-    supplier_id BIGINT NOT NULL DEFAULT 0 COMMENT '供应商ID（对应supplier_profiles.id）',
-    notice_id BIGINT NOT NULL DEFAULT 0 COMMENT '公告ID（对应procurement_notices.id）',
+    supplier_id BIGINT NOT NULL DEFAULT 0 COMMENT '供应商ID（对应supplier.id）',
+    notice_id BIGINT NOT NULL DEFAULT 0 COMMENT '公告ID（对应notices.id）',
 
 
     -- 第二层：AI精筛结果

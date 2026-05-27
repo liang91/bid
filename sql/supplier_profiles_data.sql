@@ -6,7 +6,7 @@
 
 USE bid;
 
-INSERT INTO supplier_profiles
+INSERT INTO suppliers
 (company_name, company_scale, province, city, district, business_scope, qualifications, qualification_summary, min_budget, max_budget, sme_status, ca_ready, preferred_methods, joint_bid_willing, excluded_keywords)
 VALUES
 ('云智联科技有限公司', '中型', '四川省', '成都市', '高新区', '云计算平台,大数据服务,IT运维,系统集成', '[{"name": "信息系统集成及服务资质", "cert_no": "XZ510001", "valid_until": "2027-06-30"}, {"name": "ISO27001信息安全管理", "cert_no": "IS027001-2024-0088", "valid_until": "2027-03-15"}]', '信息系统集成及服务资质+ISO27001', 500000.00, 50000000.00, 1, 0, '公开招标,竞争性磋商', 1, ''

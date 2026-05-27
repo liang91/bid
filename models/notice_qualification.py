@@ -12,7 +12,7 @@ class NoticeQualification(Base):
     __tablename__ = "notice_qualifications"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True, comment="主键ID")
-    notice_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("procurement_notices.id"), default=0,
+    notice_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("notices.id"), default=0,
                                            comment="公告ID")
     qualification_type: Mapped[str] = mapped_column(String(32), default="", comment="资质类型")
     name: Mapped[str] = mapped_column(String(128), default="", comment="资质名称")

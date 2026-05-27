@@ -11,8 +11,8 @@ from sqlalchemy.dialects.mysql import TINYINT
 from sqlalchemy.orm import Mapped, mapped_column
 
 
-class ProcurementNotice(Base):
-    __tablename__ = "procurement_notices"
+class Notice(Base):
+    __tablename__ = "notices"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True, comment="主键ID")
 
@@ -95,7 +95,7 @@ class ProcurementNotice(Base):
                                                  comment="更新时间")
 
 
-class ProcurementNoticeDto(BaseModel):
+class NoticeDto(BaseModel):
     """招标公告数据类."""
 
     id: Optional[int] = None

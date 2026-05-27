@@ -14,7 +14,7 @@ class NoticeAttachment(Base):
     __tablename__ = "notice_attachments"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True, comment="主键ID")
-    notice_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("procurement_notices.id"), default=0,
+    notice_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("notices.id"), default=0,
                                            comment="公告ID")
     name: Mapped[str] = mapped_column(String(256), default="", comment="附件名称")
     url: Mapped[str] = mapped_column(String(512), default="", comment="附件URL")

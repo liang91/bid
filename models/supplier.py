@@ -11,8 +11,8 @@ from sqlalchemy.dialects.mysql import TINYINT
 from sqlalchemy.orm import Mapped, mapped_column
 
 
-class SupplierProfile(Base):
-    __tablename__ = "supplier_profiles"
+class Supplier(Base):
+    __tablename__ = "suppliers"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True, comment="主键ID")
 
@@ -56,7 +56,7 @@ class SupplierQualification(BaseModel):
     cert_no: str = ''
     valid_until: str = ''
 
-class SupplierProfileDto(BaseModel):
+class SupplierDto(BaseModel):
     """供应商画像数据类."""
     model_config = ConfigDict(from_attributes=True)
 
