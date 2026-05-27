@@ -32,7 +32,9 @@ class TestSupplierDao:
         if res:
             print(res.model_dump_json())
 
-    def test_list(self):
-        all = SupplierDao.list_all()
+    def test_unembed(self):
+        suppliers = SupplierDao.unembed()
         adapter = TypeAdapter(list[SupplierDto])
-        print(adapter.dump_json(all).decode('utf-8'))
+        res = adapter.dump_json(suppliers).decode('utf-8')
+        print(res)
+

@@ -1,6 +1,5 @@
 """supplier 表的数据访问对象（SQLAlchemy 2.0）."""
-
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from models import Supplier, SupplierDto
 
@@ -28,18 +27,25 @@ class SupplierDao:
             return SupplierDto.model_validate(obj)
 
     @staticmethod
-    def list_all() -> list[SupplierDto]:
+    def all() -> list[SupplierDto]:
         """查询所有供应商画像."""
         with db() as session:
             result = session.execute(select(Supplier))
             return [SupplierDto.model_validate(row) for row in result.scalars().all()]
 
     @staticmethod
-    def update_embedding(supplier_id: int, embedding: list) -> bool:
+    def unembed() -> list[SupplierDto]:
+        """查询所有未生成embedding的供应商"""
+        with db() as session:
+            stmt = select(Supplier).where(Supplier.profile_embedding == None)
+            rows = session.execute(stmt).scalars().all()
+            result = [SupplierDto.model_validate(row) for row in rows]
+            return result
+
+    @staticmethod
+    def update_embedding(supplier_id: int, embedding: bytes) -> bool:
         """更新供应商的 Embedding 向量."""
         with db.begin() as session:
-            supplier = session.get(Supplier, supplier_id)
-            if not supplier:
-                return False
-            supplier.profile_embedding = embedding
-            return True
+            stmt = update(Supplier).where(Supplier.id == supplier_id).values(profile_embedding=embedding)
+            res = session.execute(stmt)
+            return res.rowcount == 1

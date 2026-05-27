@@ -42,7 +42,6 @@ class MatchService:
         # -------------------------------------------------------------------
         if not supplier.profile_embedding:
             return []
-        supplier_vec = np.frombuffer(supplier.profile_embedding, dtype=np.float32).tolist()
 
         # 收集有 embedding 的公告（supplier_profile_embedding 为 BLOB，需反序列化）
         candidate_with_vectors = []
@@ -50,16 +49,15 @@ class MatchService:
         for candidate in candidates:
             if not candidate.supplier_profile_embedding:
                 continue
-            vec = np.frombuffer(candidate.supplier_profile_embedding, dtype=np.float32).tolist()
             candidate_with_vectors.append(candidate)
-            candidate_vectors.append(vec)
+            candidate_vectors.append(candidate.supplier_profile_embedding)
 
         if not candidate_with_vectors:
             logger.warning(f"[MatchEngine] 供应商 {supplier.id} 候选公告均无 embedding，跳过语义排序")
             return []
 
         # 批量矩阵计算相似度
-        scores = LLMEmbedding.similarity_matrix(supplier_vec, candidate_vectors)
+        scores = LLMEmbedding.similarities(supplier.profile_embedding, candidate_vectors)
         scored = list(zip(scores, candidate_with_vectors))
         scored.sort(key=lambda x: x[0], reverse=True)
 
@@ -111,7 +109,7 @@ class MatchService:
                     skipped += 1
                     continue
                 try:
-                    embedding = LLMEmbedding.embed(notice.supplier_profile, as_bytes=True)
+                    embedding = LLMEmbedding.embed(notice.supplier_profile)
                     if embedding:
                         NoticeDao.update_supplier_profile_embedding(notice.id, embedding)
                         success += 1
@@ -122,36 +120,5 @@ class MatchService:
                 except Exception as e:
                     failed += 1
                     logger.error(f"[backfill] id={notice.id} 失败: {e}")
-
-        logger.info(f"补算完成: 成功 {success} 条, 失败 {failed} 条, 跳过 {skipped} 条")
-
-    # ---------------------------------------------------------------------------
-    # 补算供应商 Embedding
-    # ---------------------------------------------------------------------------
-    @staticmethod
-    def run_backfill_supplier(args):
-        suppliers = SupplierDao.list_all()
-        if not suppliers:
-            logger.info("没有供应商记录")
-            return
-
-        success = failed = skipped = 0
-        for supplier in suppliers:
-            if supplier.profile_embedding and len(supplier.profile_embedding) > 0:
-                skipped += 1
-                continue
-
-            try:
-                embedding = LLMEmbedding.get_supplier_embedding(supplier)
-                if embedding:
-                    SupplierDao.update_embedding(supplier.id, embedding)
-                    success += 1
-                    logger.info(f"[backfill] supplier_id={supplier.id} {supplier.company_name} 成功")
-                else:
-                    failed += 1
-                    logger.warning(f"[backfill] supplier_id={supplier.id} 返回空向量")
-            except Exception as e:
-                failed += 1
-                logger.error(f"[backfill] supplier_id={supplier.id} 失败: {e}")
 
         logger.info(f"补算完成: 成功 {success} 条, 失败 {failed} 条, 跳过 {skipped} 条")

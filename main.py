@@ -65,11 +65,7 @@ def main():
         help="每次处理的最大条数 (默认: 100)",
     )
 
-    # 匹配参数
-    parser.add_argument(
-        "--supplier", type=int, default=0,
-        help="指定供应商 id（0=全部，仅 match 有效）",
-    )
+    # 推荐的条数
     parser.add_argument(
         "--top-k", type=int, default=200,
         help="语义排序后保留的 Top K 条 (默认: 200，仅 match 有效)",
@@ -81,8 +77,6 @@ def main():
         ClawerService.run("dfgg", args.step, args.size)
     elif args.step == "backfill_notice":
         MatchService.run_backfill_notice(args)
-    elif args.step == "backfill_supplier":
-        MatchService.run_backfill_supplier(args)
     elif args.step == "match":
         MatchService.rank_for_supplier(args.supplier)
 

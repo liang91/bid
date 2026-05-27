@@ -11,6 +11,12 @@ from sqlalchemy.dialects.mysql import TINYINT
 from sqlalchemy.orm import Mapped, mapped_column
 
 
+class SupplierQualification(BaseModel):
+    name: str = ''
+    cert_no: str = ''
+    valid_until: str = ''
+
+
 class Supplier(Base):
     __tablename__ = "suppliers"
 
@@ -30,10 +36,10 @@ class Supplier(Base):
     # === 业务范围 ===
     business_scope: Mapped[Optional[str]] = mapped_column(Text, comment="业务范围")
     service_regions: Mapped[list[str]] = mapped_column(JSON, default=[], comment="可服务地区列表")
-    profile_embedding: Mapped[Optional[bytes]] = mapped_column(LargeBinary, comment="供应商画像语义向量")
+    profile_embedding: Mapped[bytes | None] = mapped_column(LargeBinary, comment="供应商画像语义向量")
 
     # === 资质证书 ===
-    qualifications: Mapped[Optional[list]] = mapped_column(JSON, default=[], comment="资质证书列表")
+    qualifications: Mapped[list[SupplierQualification] | None] = mapped_column(JSON, default=[], comment="资质证书列表")
     qualification_summary: Mapped[str] = mapped_column(String(512), default="", comment="资质摘要")
 
     # === 需求偏好 ===
@@ -51,10 +57,6 @@ class Supplier(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now,
                                                  comment="更新时间")
 
-class SupplierQualification(BaseModel):
-    name: str = ''
-    cert_no: str = ''
-    valid_until: str = ''
 
 class SupplierDto(BaseModel):
     """供应商画像数据类."""

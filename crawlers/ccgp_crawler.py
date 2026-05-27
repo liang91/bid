@@ -246,7 +246,7 @@ class CCGPCrawler:
             notices = self._parse_list_page(html, url)
             all_notices.extend(notices)
             logger.info(f"[fetch_list] 第{page}页 获取 {len(notices)} 条，累计 {len(all_notices)} 条")
-            time.sleep(self.delay)
+            time.sleep(1)
 
         tender_notices = [dto for dto in all_notices if self._is_tender_notice(dto)]
         excluded = len(all_notices) - len(tender_notices)
@@ -281,7 +281,7 @@ class CCGPCrawler:
                 html_path = self.save_cleaned_html(html)
                 NoticeDao.update_html(notice.id, html_path)
                 success += 1
-                time.sleep(self.delay)
+                time.sleep(1)
             else:
                 failed += 1
 
@@ -320,7 +320,7 @@ class CCGPCrawler:
                 notice_dict = notice.model_dump()
                 notice_dict.update(data)
                 notice = NoticeDto(**notice_dict)
-                notice.supplier_profile_embedding = LLMEmbedding.embed(notice.supplier_profile, as_bytes=True)
+                notice.supplier_profile_embedding = LLMEmbedding.embed(notice.supplier_profile)
                 ok = NoticeDao.update_parsed(notice)
                 if ok:
                     NoticeAttachmentDao.insert(notice.id, attachments)
