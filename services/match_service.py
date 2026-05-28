@@ -1,15 +1,13 @@
 """招标信息匹配引擎.
 
 三层匹配架构：
-1. 粗筛（SQL硬规则）：地域、预算、采购方式、排除项、CA/中小企业、时效性
+1. 粗筛（SQL硬规则）：时效性、地域、预算
 2. 初筛第二阶段（语义排序）：Embedding 余弦相似度排序
 3. 精筛（AI打分）：LLM 深度语义匹配，输出 Top3
 """
 from loguru import logger
-from models import NoticeDto, Notice
-from dao import NoticeDao, SupplierDao, db
-import numpy as np
-from sqlalchemy import select
+from models import NoticeDto
+from dao import NoticeDao, SupplierDao
 from providers import LLMEmbedding
 
 
@@ -22,11 +20,11 @@ class MatchService:
         # -------------------------------------------------------------------
         # 第1层：SQL硬规则粗筛
         # -------------------------------------------------------------------
-        supplier = SupplierDao.get_by_id(supplier_id)
+        supplier = SupplierDao.get(supplier_id)
         if not supplier:
             return []
 
-        candidates = NoticeDao.fetch_candidates_for_matching(
+        candidates = NoticeDao.fetch_candidates(
             region_names=supplier.service_regions,
             min_budget=float(supplier.min_budget) if supplier.min_budget else 0,
             max_budget=float(supplier.max_budget) if supplier.max_budget else 999999999.99,
@@ -67,58 +65,3 @@ class MatchService:
         )
 
         return scored[:top_k]
-
-    # ---------------------------------------------------------------------------
-    # 补算公告 Embedding
-    # ---------------------------------------------------------------------------
-    @staticmethod
-    def run_backfill_notice(args):
-        with db() as session:
-            stmt = (
-                select(Notice.id)
-                .where(
-                    Notice.status == 30,
-                    Notice.supplier_profile.isnot(None),
-                    Notice.supplier_profile != "",
-                    Notice.supplier_profile_embedding.is_(None),
-                )
-                .order_by(Notice.id.desc())
-            )
-            if args.limit > 0:
-                stmt = stmt.limit(args.limit)
-            result = session.execute(stmt)
-            notice_ids = [row[0] for row in result.all()]
-
-        if not notice_ids:
-            logger.info("没有待补算 supplier_profile_embedding 的公告")
-            return
-
-        logger.info(f"待补算公告共 {len(notice_ids)} 条")
-
-        success = failed = skipped = 0
-        for i in range(0, len(notice_ids), args.batch):
-            batch_ids = notice_ids[i: i + args.batch]
-
-            with db() as session:
-                notices = session.execute(
-                    select(Notice).where(Notice.id.in_(batch_ids))
-                ).scalars().all()
-
-            for notice in notices:
-                if not notice.supplier_profile:
-                    skipped += 1
-                    continue
-                try:
-                    embedding = LLMEmbedding.embed(notice.supplier_profile)
-                    if embedding:
-                        NoticeDao.update_supplier_profile_embedding(notice.id, embedding)
-                        success += 1
-                        logger.info(f"[backfill] id={notice.id} 成功")
-                    else:
-                        failed += 1
-                        logger.warning(f"[backfill] id={notice.id} 返回空向量")
-                except Exception as e:
-                    failed += 1
-                    logger.error(f"[backfill] id={notice.id} 失败: {e}")
-
-        logger.info(f"补算完成: 成功 {success} 条, 失败 {failed} 条, 跳过 {skipped} 条")

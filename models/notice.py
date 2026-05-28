@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Optional
 from models import Base, _DEFAULT_DATETIME
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import BigInteger, DECIMAL, DateTime, JSON, LargeBinary, String, Text
 from sqlalchemy.dialects.mysql import TINYINT
 from sqlalchemy.orm import Mapped, mapped_column
@@ -97,6 +97,7 @@ class Notice(Base):
 
 class NoticeDto(BaseModel):
     """招标公告数据类."""
+    model_config = ConfigDict(from_attributes=True)
 
     id: Optional[int] = None
     platform: str = ""
@@ -139,7 +140,7 @@ class NoticeDto(BaseModel):
     industry_tags: list[str] = []
     abstract: str = ""
     supplier_profile: str = ''
-    supplier_profile_embedding: bytes | None = None
+    supplier_profile_embedding: bytes | None = Field(default=None, exclude=True)
     html: str = ''
     parse_time: datetime = Field(default_factory=datetime.now)
     status: int = 1

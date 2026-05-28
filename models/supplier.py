@@ -72,7 +72,7 @@ class SupplierDto(BaseModel):
     ca_ready: int = 0
     business_scope: str = ""
     service_regions: list[str] = []
-    profile_embedding: bytes | None = None
+    profile_embedding: bytes | None = Field(default=None, exclude=True)
     qualifications: list[SupplierQualification] = []
     qualification_summary: str = ""
     min_budget: Decimal = Decimal("0.00")

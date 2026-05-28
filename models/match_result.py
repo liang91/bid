@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Optional
 from models import Base, _DEFAULT_DATETIME
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import BigInteger, DateTime, DECIMAL, Index, String, Text, UniqueConstraint
 from sqlalchemy.dialects.mysql import TINYINT
 from sqlalchemy.orm import Mapped, mapped_column
@@ -54,6 +54,7 @@ class MatchResult(Base):
 
 class MatchResultDto(BaseModel):
     """匹配结果数据类."""
+    model_config = ConfigDict(from_attributes=True)
 
     id: Optional[int] = None
     supplier_id: int = 0

@@ -3,7 +3,7 @@
 from typing import Optional
 from models import Base
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import BigInteger, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -20,6 +20,7 @@ class NoticeQualification(Base):
 
 class NoticeQualificationDto(BaseModel):
     """公告资质要求数据类."""
+    model_config = ConfigDict(from_attributes=True)
 
     id: Optional[int] = None
     notice_id: int = 0

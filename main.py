@@ -75,8 +75,6 @@ def main():
 
     if args.step in ("list", "html", "parse"):
         ClawerService.run("dfgg", args.step, args.size)
-    elif args.step == "backfill_notice":
-        MatchService.run_backfill_notice(args)
     elif args.step == "match":
         MatchService.rank_for_supplier(args.supplier)
 

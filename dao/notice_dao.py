@@ -1,7 +1,8 @@
 """notices 表的数据访问对象（SQLAlchemy 2.0）."""
 
 from datetime import datetime
-from typing import List, Optional
+from decimal import Decimal
+from typing import List
 from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.dialects.mysql import insert
@@ -13,17 +14,14 @@ class NoticeDao:
     """招标公告主表存储器."""
 
     @staticmethod
-    def get_by_id(id: int) -> Optional[NoticeDto]:
+    def get(notice_id: int) -> NoticeDto | None:
         """根据公告ID查询."""
         with db() as session:
-            obj = session.get(Notice, id)
+            obj = session.get(Notice, notice_id)
             if not obj:
                 return None
-            return orm_to_dto(obj, NoticeDto)
+            return NoticeDto.model_validate(obj)
 
-    # -----------------------------------------------------------------------
-    # 批量保存（INSERT ... ON DUPLICATE KEY UPDATE）
-    # -----------------------------------------------------------------------
     @staticmethod
     def create(notices: list[NoticeDto]) -> bool:
         """批量保存公告，自动去重（基于 URL）并更新已存在记录"""
@@ -35,74 +33,29 @@ class NoticeDao:
         return True
 
     # -----------------------------------------------------------------------
-    # Embedding 更新（supplier_profile_embedding BLOB 字段）
-    # -----------------------------------------------------------------------
     @staticmethod
-    def update_supplier_profile_embedding(notice_id: int, embedding: bytes) -> bool:
-        """更新公告的 supplier_profile_embedding 向量（BLOB 存储）."""
-        with db.begin() as session:
-            notice = session.get(Notice, notice_id)
-            if not notice:
-                return False
-            notice.supplier_profile_embedding = embedding
-            return True
-
-    # -----------------------------------------------------------------------
-    # 粗筛查询（硬规则）
-    # -----------------------------------------------------------------------
-    @staticmethod
-    def fetch_candidates_for_matching(
-            region_names: list,
-            min_budget: float,
-            max_budget: float,
+    def fetch_candidates(
+            region_names: list[str],
+            min_budget: Decimal,
+            max_budget: Decimal,
             limit: int = 25,
     ) -> list[NoticeDto]:
         """硬规则粗筛：根据地域、预算、采购方式、排除项、CA/中小企业、时效性筛选公告."""
         stmt = select(Notice).where(
             Notice.status == 30,
             Notice.bid_deadline > func.now(),
-            Notice.region_province.in_(region_names),
             Notice.budget >= min_budget,
             Notice.budget <= max_budget,
         )
+        if region_names:
+            stmt.where(Notice.region_province.in_(region_names))
         stmt = stmt.order_by(Notice.notice_date.desc()).limit(limit)
 
         with db() as session:
             result = session.execute(stmt)
-            return [orm_to_dto(row, NoticeDto) for row in result.scalars().all()]
-
+            return [NoticeDto.model_validate(row) for row in result.scalars().all()]
+    # 粗筛查询（硬规则）
     # -----------------------------------------------------------------------
-    # URL 存在性检查
-    # -----------------------------------------------------------------------
-    @staticmethod
-    def exists(url: str) -> bool:
-        """检查 URL 是否已存在."""
-        with db.begin() as session:
-            result = session.execute(
-                select(Notice.id).where(Notice.url == url).limit(1)
-            )
-            return result.scalar() is not None
-
-    # -----------------------------------------------------------------------
-    # URL 去重
-    # -----------------------------------------------------------------------
-    @staticmethod
-    def dedup_by_url(notices: List[NoticeDto]) -> List[NoticeDto]:
-        """基于数据库已有 URL 去重，返回尚未入库的公告."""
-        if not notices:
-            return []
-
-        urls = [dto.url for dto in notices if dto.url]
-        if not urls:
-            return notices
-
-        with db() as session:
-            existing = session.execute(
-                select(Notice.url).where(Notice.url.in_(urls))
-            ).scalars().all()
-            existing_set = set(existing)
-
-        return [dto for dto in notices if dto.url not in existing_set]
 
     # -----------------------------------------------------------------------
     # 按状态查询

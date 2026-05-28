@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Optional
 from models import Base
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import BigInteger, DECIMAL, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -24,6 +24,7 @@ class NoticePackage(Base):
 
 class NoticePackageDto(BaseModel):
     """公告分包数据类."""
+    model_config = ConfigDict(from_attributes=True)
 
     id: Optional[int] = None
     notice_id: int = 0

@@ -12,7 +12,7 @@ class SupplierService:
 
     @staticmethod
     def update_profile_embedding(supplier_id: int) -> bool:
-        supplier = SupplierDao.get_by_id(supplier_id)
+        supplier = SupplierDao.get(supplier_id)
         if not supplier:
             return False
         profile = f"公司业务范围：{supplier.business_scope}。具备的资质：{supplier.qualification_summary}"

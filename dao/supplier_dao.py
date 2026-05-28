@@ -18,7 +18,7 @@ class SupplierDao:
             return profile.id
 
     @staticmethod
-    def get_by_id(supplier_id: int) -> SupplierDto | None:
+    def get(supplier_id: int) -> SupplierDto | None:
         """根据供应商ID查询供应商画像."""
         with db() as session:
             obj = session.get(Supplier, supplier_id)

@@ -28,7 +28,7 @@ class TestSupplierDao:
         print(id)
 
     def test_get_by_id(self):
-        res = SupplierDao.get_by_id(1)
+        res = SupplierDao.get(1)
         if res:
             print(res.model_dump_json())
 

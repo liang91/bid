@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Optional
 from models import Base
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, String
 from sqlalchemy.dialects.mysql import TINYINT
 from sqlalchemy.orm import Mapped, mapped_column
@@ -26,6 +26,7 @@ class NoticeAttachment(Base):
 
 class NoticeAttachmentDto(BaseModel):
     """公告附件数据类."""
+    model_config = ConfigDict(from_attributes=True)
 
     id: Optional[int] = None
     notice_id: int = 0
