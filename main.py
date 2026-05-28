@@ -21,7 +21,8 @@
     python main.py --step match --supplier 1001 --output result.json
 """
 import argparse
-from services import ClawerService, MatchService
+from services import ClawerService, MatchService, NoticeService
+
 
 # ---------------------------------------------------------------------------
 # CLI 入口
@@ -36,10 +37,6 @@ def main():
   python main.py --step list --pages 1
   python main.py --step html --limit 2
   python main.py --step parse --limit 2
-
-  # 补算 Embedding
-  python main.py --step backfill_notice --batch 50
-  python main.py --step backfill_supplier
 
   # 匹配
   python main.py --step match --top-k 200
@@ -73,10 +70,12 @@ def main():
 
     args = parser.parse_args()
 
-    if args.step in ("list", "html", "parse"):
+    if args.step in ("list", "html"):
         ClawerService.run("dfgg", args.step, args.size)
     elif args.step == "match":
         MatchService.rank_for_supplier(args.supplier)
+    elif args.step == "parse":
+        print(NoticeService.parse_htmls(args.size))
 
 
 if __name__ == "__main__":

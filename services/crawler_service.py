@@ -16,7 +16,3 @@ class ClawerService:
             logger.info(">>> 执行第2步: fetch_html (获取详情页 HTML，status=1 → 20)")
             result = crawler.fetch_html(limit=size)
             logger.info(f"[结果] 共 {result['total']} 条, 成功 {result['success']} 条, 失败 {result['failed']} 条")
-        elif step == "parse":
-            logger.info(">>> 执行第3步: parse_detail (LLM 解析详情，status=20 → 30)")
-            result = crawler.parse_detail(limit=size)
-            logger.info(f"[结果] 共 {result['total']} 条, 成功 {result['success']} 条, 失败 {result['failed']} 条")

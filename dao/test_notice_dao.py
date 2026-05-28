@@ -19,6 +19,10 @@ class TestNoticeDao:
         ])
         print(res)
 
+    def test_fetch_unparsed(self):
+        res = NoticeDao.fetch_unparsed()
+        print(res)
+
     def test_fetch_candidates(self):
         supplier = SupplierDao.get(37)
         candidates = NoticeDao.fetch_candidates(

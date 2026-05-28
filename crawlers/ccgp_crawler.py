@@ -1,21 +1,14 @@
 """中国政府采购网爬虫实现."""
-import os
 import time
-from typing import List, Optional
 from urllib.parse import urljoin
 
 from loguru import logger
 import requests
 from bs4 import BeautifulSoup, Comment
 
-from dao import (
-    NoticeDao,
-    NoticeAttachmentDao,
-    NoticePackageDao,
-    NoticeQualificationDao,
-)
-from models import NoticeDto, NoticeAttachmentDto, NoticePackageDto, NoticeQualificationDto
-from providers import LLMParser, LLMEmbedding
+import util
+from dao import NoticeDao
+from models import NoticeDto
 
 DEFAULT_HEADERS = {
     "User-Agent": (
@@ -149,7 +142,7 @@ class CCGPCrawler:
         self.session = requests.Session()
         self.session.headers.update(DEFAULT_HEADERS)
 
-    def _get(self, url: str) -> Optional[str]:
+    def _get(self, url: str) -> str | None:
         for attempt in range(3):
             try:
                 resp = self.session.get(url, timeout=30)
@@ -166,7 +159,7 @@ class CCGPCrawler:
             return urljoin(self.list_base_url, "index.htm")
         return urljoin(self.list_base_url, f"index_{page}.htm")
 
-    def _parse_list_page(self, html: str, list_url: str) -> List[NoticeDto]:
+    def _parse_list_page(self, html: str, list_url: str) -> list[NoticeDto]:
         """解析列表页，返回招标公告 DTO 列表."""
         notices = []
         soup = BeautifulSoup(html, "lxml")
@@ -221,16 +214,7 @@ class CCGPCrawler:
             tag.attrs = {k: v for k, v in tag.attrs.items() if k == 'href'}
         content = str(main)
         content = content.replace("<span>", "").replace("</span>", "")
-        os.makedirs("html", exist_ok=True)
-        filename = f"html/{int(time.time() * 1000000)}.html"
-        with open(filename, "w", encoding="utf-8") as f:
-            f.write(content)
-        return filename
-
-    @staticmethod
-    def get_cleand_html(path: str) -> str:
-        with open(path, "r", encoding="utf-8") as f:
-            return f.read()
+        return util.save_html(content)
 
     # ========================================================================
     # 第1步：fetch_list
@@ -287,56 +271,3 @@ class CCGPCrawler:
 
         logger.info(f"[fetch_html] 完成: 成功 {success} 条, 失败 {failed} 条")
         return {"total": len(notices), "success": success, "failed": failed}
-
-    # ========================================================================
-    # 第3步：parse_detail
-    # ========================================================================
-    def parse_detail(self, limit: int = 100) -> dict:
-        notices = NoticeDao.fetch_by_status(status=20, platform=self.PLATFORM, limit=limit)
-        if not notices:
-            logger.info("[parse_detail] 没有待解析的记录")
-            return {"total": 0, "success": 0, "failed": 0}
-
-        logger.info(f"[parse_detail] 共 {len(notices)} 条待处理")
-        success = failed = 0
-
-        for idx, notice in enumerate(notices, 1):
-            if not notice.html:
-                logger.warning(f"[parse_detail] {idx}/{len(notices)} 跳过: 无HTML内容")
-                failed += 1
-                continue
-
-            try:
-                data = LLMParser.parse(CCGPCrawler.PROMPT + self.get_cleand_html(notice.html))
-                attachments = data.pop("notice_attachments", None) or []
-                attachments = [NoticeAttachmentDto(**attachment) for attachment in attachments]
-
-                packages = data.pop("notice_packages", None) or []
-                packages = [NoticePackageDto(**package) for package in packages]
-
-                qualifications = data.pop("notice_qualifications", None) or []
-                qualifications = [NoticeQualificationDto(**qualification) for qualification in qualifications]
-
-                notice_dict = notice.model_dump()
-                notice_dict.update(data)
-                notice = NoticeDto(**notice_dict)
-                notice.supplier_profile_embedding = LLMEmbedding.embed(notice.supplier_profile)
-                ok = NoticeDao.update_parsed(notice)
-                if ok:
-                    NoticeAttachmentDao.insert(notice.id, attachments)
-                    NoticePackageDao.insert(notice.id, packages)
-                    NoticeQualificationDao.insert(notice.id, qualifications)
-                    success += 1
-                    logger.info(f"[parse_detail-llm] {idx}/{len(notices)} 成功: {notice.project_name[:40]}...")
-                else:
-                    failed += 1
-                    logger.error(f"[parse_detail] {idx}/{len(notices)} 更新DB失败: id={notice.id}")
-            except Exception as e:
-                failed += 1
-                logger.error(f"[parse_detail] {idx}/{len(notices)} 解析失败: {e}")
-
-            break
-
-        logger.info(f"[parse_detail] 完成: 成功 {success} 条, 失败 {failed} 条")
-        return {"total": len(notices), "success": success, "failed": failed}
-

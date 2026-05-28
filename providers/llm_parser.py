@@ -28,7 +28,7 @@ class LLMParser:
         api_key=config.get("llm.api_key")
     )
     # LLM 所用模型名称
-    model = config.get("llm.models")
+    model = config.get("llm.model")
 
     @classmethod
     def parse(cls, prompt: str) -> dict:

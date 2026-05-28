@@ -54,8 +54,6 @@ class NoticeDao:
         with db() as session:
             result = session.execute(stmt)
             return [NoticeDto.model_validate(row) for row in result.scalars().all()]
-    # 粗筛查询（硬规则）
-    # -----------------------------------------------------------------------
 
     # -----------------------------------------------------------------------
     # 按状态查询
@@ -70,7 +68,14 @@ class NoticeDao:
                 .order_by(Notice.id.asc())
                 .limit(limit)
             )
-            return [orm_to_dto(row, NoticeDto) for row in result.scalars().all()]
+            return [NoticeDto.model_validate(row) for row in result.scalars().all()]
+
+    @staticmethod
+    def fetch_unparsed(limit: int = 100) -> list[NoticeDto]:
+        with db() as session:
+            stmt = select(Notice).where(Notice.status == 20, Notice.html != '').order_by(Notice.id.asc()).limit(limit)
+            rows = session.execute(stmt).scalars().all()
+            return [NoticeDto.model_validate(row) for row in rows]
 
     # -----------------------------------------------------------------------
     # 更新 HTML
