@@ -11,17 +11,11 @@
     python main.py --step list --pages 2
     python main.py --step html --limit 50
     python main.py --step parse --limit 20
-
-    # 补算 Embedding
-    python main.py --step backfill_notice --batch 50 --limit 100
-    python main.py --step backfill_supplier
-
-    # 匹配
-    python main.py --step match --top-k 200
-    python main.py --step match --supplier 1001 --output result.json
 """
 import argparse
-from services import ClawerService, MatchService, NoticeService
+
+from loguru import logger
+from services import ClawerService, NoticeService, SupplierService
 
 
 # ---------------------------------------------------------------------------
@@ -73,9 +67,10 @@ def main():
     if args.step in ("list", "html"):
         ClawerService.run("dfgg", args.step, args.size)
     elif args.step == "match":
-        MatchService.rank_for_supplier(args.supplier)
+        SupplierService.match_notices(args.supplier)
     elif args.step == "parse":
-        print(NoticeService.parse_htmls(args.size))
+        NoticeService.parse_htmls(args.size)
+        logger.info("parse htmls done")
 
 
 if __name__ == "__main__":

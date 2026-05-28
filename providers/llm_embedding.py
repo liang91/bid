@@ -41,21 +41,6 @@ class LLMEmbedding:
             logger.error(f"[Embedding失败] {e}")
             return None
 
-    @staticmethod
-    def build_supplier_text(supplier: Any) -> str:
-        """将供应商画像拼接为一段自然语言文本，用于 Embedding."""
-
-        return "。".join(parts)
-
-    # -------------------------------------------------------------------------
-    # 便捷方法：直接传入模型对象
-    # -------------------------------------------------------------------------
-
-    @classmethod
-    def get_supplier_embedding(cls, supplier: Any) -> bytes | None:
-        """获取供应商画像的 Embedding 向量."""
-        text = cls.build_supplier_text(supplier)
-        return cls.embed(text)
 
     # -------------------------------------------------------------------------
     # 相似度计算

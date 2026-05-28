@@ -1,4 +1,4 @@
-from services.supplier_service import SupplierService
+from services import SupplierService
 
 
 class TestSupplierService:
@@ -8,3 +8,7 @@ class TestSupplierService:
 
     def test_set_profile_embeddings(self):
         SupplierService.set_profile_embeddings()
+
+    def test_recomment_notices(self):
+        res = SupplierService.match_notices(37)
+        print(res)

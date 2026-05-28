@@ -1,3 +1,4 @@
+from loguru import logger
 from pydantic import TypeAdapter
 
 from models import NoticeDto
@@ -23,13 +24,19 @@ class TestNoticeDao:
         res = NoticeDao.fetch_unparsed()
         print(res)
 
+    def test_update_html(self):
+        html = 'html/1779948678862156.html'
+        id = 62
+        logger.info(NoticeDao.update_html(id, html))
+
     def test_fetch_candidates(self):
         supplier = SupplierDao.get(37)
         candidates = NoticeDao.fetch_candidates(
             region_names=[],
             min_budget=supplier.min_budget,
-            max_budget=supplier.max_budget,
-            limit=5
+            max_budget=supplier.max_budget
         )
+        for candidate in candidates:
+            candidate.supplier_profile_embedding = None
         adapter = TypeAdapter(list[NoticeDto])
-        print(adapter.dump_json(candidates, ensure_ascii=False))
+        print(adapter.dump_json(candidates, ensure_ascii=False).decode('utf-8'))

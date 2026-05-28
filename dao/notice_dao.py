@@ -4,8 +4,9 @@ from datetime import datetime
 from decimal import Decimal
 from typing import List
 from loguru import logger
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.mysql import insert
+
 from models import Notice, NoticeDto
 from dao import db, orm_to_dto
 
@@ -48,7 +49,7 @@ class NoticeDao:
             Notice.budget <= max_budget,
         )
         if region_names:
-            stmt.where(Notice.region_province.in_(region_names))
+            stmt = stmt.where(Notice.region_province.in_(region_names))
         stmt = stmt.order_by(Notice.notice_date.desc()).limit(limit)
 
         with db() as session:
@@ -84,13 +85,9 @@ class NoticeDao:
     def update_html(notice_id: int, html: str) -> bool:
         """保存html文件路径，并将状态推进到 20."""
         with db.begin() as session:
-            notice = session.get(Notice, notice_id)
-            if not notice:
-                return False
-            notice.html = html
-            notice.status = 20
-            notice.updated_at = datetime.now()
-            return True
+            stmt = update(Notice).where(Notice.id == notice_id).values(html=html, status= 20)
+            res = session.execute(stmt)
+            return res.rowcount == 1
 
     # -----------------------------------------------------------------------
     # 更新解析结果
@@ -103,14 +100,7 @@ class NoticeDao:
             return False
 
         with db.begin() as session:
-            notice = session.get(Notice, dto.id)
-            if not notice:
-                logger.error(f"[NoticeDao] update_parsed 失败: id={dto.id} 不存在")
-                return False
-
-            for key, value in dto.model_dump(exclude={"id", "created_at"}).items():
-                setattr(notice, key, value)
-
-            notice.status = 30
-            notice.updated_at = datetime.now()
-            return True
+            dto.status = 30
+            stmt = update(Notice).where(Notice.id == dto.id).values(dto.model_dump(exclude={"id", "created_at"}))
+            res = session.execute(stmt)
+            return res.rowcount == 1

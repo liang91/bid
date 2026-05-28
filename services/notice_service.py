@@ -38,7 +38,7 @@ class NoticeService:
             logger.info(f"公告{notice.id} HTML解析成功")
             return True
         except Exception as e:
-            logger.error(f"公告{notice.id} HTML解析失败:", e)
+            logger.error(f"公告{notice.id} HTML解析失败:{e}")
             return False
 
     @staticmethod

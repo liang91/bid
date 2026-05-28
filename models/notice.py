@@ -3,9 +3,12 @@
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
+
+from pydantic_core.core_schema import SerializationInfo
+
 from models import Base, _DEFAULT_DATETIME
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_serializer, SerializationInfo, model_serializer
 from sqlalchemy import BigInteger, DECIMAL, DateTime, JSON, LargeBinary, String, Text
 from sqlalchemy.dialects.mysql import TINYINT
 from sqlalchemy.orm import Mapped, mapped_column
@@ -49,13 +52,12 @@ class Notice(Base):
     notice_date: Mapped[datetime] = mapped_column(DateTime, default=_DEFAULT_DATETIME, comment="公告发布时间")
     doc_obtain_start: Mapped[datetime] = mapped_column(DateTime, default=_DEFAULT_DATETIME,
                                                        comment="获取招标文件开始时间")
-    doc_obtain_end: Mapped[datetime] = mapped_column(DateTime, default=_DEFAULT_DATETIME,
-                                                     comment="获取招标文件截止时间")
+    doc_obtain_end: Mapped[datetime] = mapped_column(DateTime, default=_DEFAULT_DATETIME, comment="获取招标文件截止时间")
     bid_deadline: Mapped[datetime] = mapped_column(DateTime, default=_DEFAULT_DATETIME, comment="招标截止时间")
     bid_open_time: Mapped[datetime] = mapped_column(DateTime, default=_DEFAULT_DATETIME, comment="开标时间")
 
     # === 投标方式 ===
-    bid_platform: Mapped[str] = mapped_column(String(128), default="", comment="投标平台")
+    bid_platform: Mapped[str] = mapped_column(String(256), default="", comment="投标平台")
     bid_platform_url: Mapped[str] = mapped_column(String(256), default="", comment="投标平台网址")
     ca_required: Mapped[int] = mapped_column(TINYINT, default=0, comment="是否需要CA")
     doc_price: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), default=Decimal("0.00"),
@@ -64,17 +66,17 @@ class Notice(Base):
     # === 采购方信息 ===
     purchaser_name: Mapped[str] = mapped_column(String(128), default="", comment="采购方名称")
     purchaser_address: Mapped[str] = mapped_column(String(256), default="", comment="采购方地址")
-    purchaser_contact_person: Mapped[str] = mapped_column(String(64), default="", comment="采购方联系人")
-    purchaser_contact_phone: Mapped[str] = mapped_column(String(32), default="", comment="采购方联系电话")
+    purchaser_contact_person: Mapped[str] = mapped_column(String(128), default="", comment="采购方联系人")
+    purchaser_contact_phone: Mapped[str] = mapped_column(String(128), default="", comment="采购方联系电话")
     # === 代理机构信息 ===
     agency_name: Mapped[str] = mapped_column(String(128), default="", comment="代理机构名称")
     agency_address: Mapped[str] = mapped_column(String(256), default="", comment="代理机构地址")
-    agency_contact_person: Mapped[str] = mapped_column(String(64), default="", comment="代理机构联系人")
-    agency_contact_phone: Mapped[str] = mapped_column(String(32), default="",
+    agency_contact_person: Mapped[str] = mapped_column(String(128), default="", comment="代理机构联系人")
+    agency_contact_phone: Mapped[str] = mapped_column(String(128), default="",
                                                       comment="代理机构联系电话")
     # === 项目联系人 ===
-    project_contact_person: Mapped[str] = mapped_column(String(64), default="", comment="采购项目联系人")
-    project_contact_phone: Mapped[str] = mapped_column(String(32), default="", comment="采购项目联系电话")
+    project_contact_person: Mapped[str] = mapped_column(String(128), default="", comment="采购项目联系人")
+    project_contact_phone: Mapped[str] = mapped_column(String(128), default="", comment="采购项目联系电话")
 
     # === 匹配特征 ===
     qualification_summary: Mapped[Optional[str]] = mapped_column(Text, comment="投标所需资质")
@@ -111,7 +113,7 @@ class NoticeDto(BaseModel):
     project_name: str = ""
     project_no: str = ""
     purchase_plan_no: str = ""
-    budget: Decimal = Decimal("0.00")
+    budget: Decimal = Decimal("0")
     currency: str = "CNY"
     method: str = ""
     joint_bid_allowed: int = 0
@@ -125,7 +127,7 @@ class NoticeDto(BaseModel):
     bid_platform: str = ""
     bid_platform_url: str = ""
     ca_required: int = 0
-    doc_price: Decimal = Decimal("0.00")
+    doc_price: Decimal = Decimal("0")
     purchaser_name: str = ""
     purchaser_address: str = ""
     purchaser_contact_person: str = ""
@@ -140,7 +142,7 @@ class NoticeDto(BaseModel):
     industry_tags: list[str] = []
     abstract: str = ""
     supplier_profile: str = ''
-    supplier_profile_embedding: bytes | None = Field(default=None, exclude=True)
+    supplier_profile_embedding: bytes | None = None
     html: str = ''
     parse_time: datetime = Field(default_factory=datetime.now)
     status: int = 1
