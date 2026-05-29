@@ -12,3 +12,6 @@ class TestSupplierService:
     def test_recomment_notices(self):
         res = SupplierService.filtered_notices(37)
         print(res)
+
+    def test_ai_match(self):
+        SupplierService.ai_match(3)

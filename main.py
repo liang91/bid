@@ -33,8 +33,7 @@ def main():
   python main.py --step parse --limit 2
 
   # 匹配
-  python main.py --step match --top-k 200
-  python main.py --step match --supplier 1001 --output result.json
+  python main.py --step match --supplier 37
         """,
     )
 
@@ -60,6 +59,11 @@ def main():
     parser.add_argument(
         "--top-k", type=int, default=200,
         help="语义排序后保留的 Top K 条 (默认: 200，仅 match 有效)",
+    )
+
+    parser.add_argument(
+        "--supplier", type=int, default=0,
+        help="供应商 ID（仅 match 有效）",
     )
 
     args = parser.parse_args()

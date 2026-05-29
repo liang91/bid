@@ -32,6 +32,7 @@ class Match(Base):
     ai_raw_response: Mapped[Optional[str]] = mapped_column(Text, comment="AI原始响应")
     ai_call_time: Mapped[datetime] = mapped_column(DateTime, default=_DEFAULT_DATETIME, comment="AI调用时间")
 
+    notice_id: Mapped[int] = mapped_column(BigInteger, default=0, comment="相对最匹配的公告id")
     final_score: Mapped[int] = mapped_column(Integer, default=0, comment="最终分数")
     final_rank: Mapped[int] = mapped_column(BigInteger, default=0, comment="最终排名")
     is_top3: Mapped[int] = mapped_column(TINYINT, default=0, comment="是否前三")
@@ -72,6 +73,7 @@ class MatchDto(BaseModel):
     ai_recommendation: str = ""
     ai_raw_response: Optional[str] = None
     ai_call_time: datetime = _DEFAULT_DATETIME
+    notice_id: int = 0
     final_score: int = 0
     final_rank: int = 0
     is_top3: int = 0
