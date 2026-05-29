@@ -52,3 +52,4 @@ from dao.notice_package_dao import NoticePackageDao
 from dao.notice_qualification_dao import NoticeQualificationDao
 from dao.supplier_dao import SupplierDao
 from dao.supplier_service_region_dao import SupplierServiceRegionDao
+from dao.match_dao import MatchDao

@@ -1,25 +1,28 @@
 """匹配结果表."""
 
-from datetime import datetime
-from decimal import Decimal
+from datetime import datetime, date
 from typing import Optional
 from models import Base, _DEFAULT_DATETIME
 
 from pydantic import BaseModel, Field, ConfigDict
-from sqlalchemy import BigInteger, DateTime, DECIMAL, Index, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Date, DateTime, JSON, String, Text, Integer
 from sqlalchemy.dialects.mysql import TINYINT
 from sqlalchemy.orm import Mapped, mapped_column
 
+class MatchNoticeScore(BaseModel):
+    notice_id: int = 0
+    score: float = 0.0
 
-class MatchResult(Base):
-    __tablename__ = "match_results"
+class Match(Base):
+    __tablename__ = "matches"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True, comment="主键ID")
 
     supplier_id: Mapped[int] = mapped_column(BigInteger, default=0, comment="供应商ID")
-    notice_id: Mapped[int] = mapped_column(BigInteger, default=0, comment="公告ID")
+    day: Mapped[datetime] = mapped_column(Date, comment="日期")
+    filtered_notices: Mapped[list[MatchNoticeScore]] = mapped_column(JSON, default=[], comment="公告ID")
 
-    ai_match_score: Mapped[Decimal] = mapped_column(DECIMAL(5, 2), default=Decimal("0.00"), comment="AI匹配分数")
+    ai_match_score: Mapped[int] = mapped_column(Integer, default=0, comment="AI匹配分数")
     ai_match_level: Mapped[str] = mapped_column(String(16), default="", comment="AI匹配等级")
     ai_match_reasons: Mapped[Optional[str]] = mapped_column(Text, comment="AI匹配原因")
     ai_risk_tips: Mapped[Optional[str]] = mapped_column(Text, comment="AI风险提示")
@@ -29,7 +32,7 @@ class MatchResult(Base):
     ai_raw_response: Mapped[Optional[str]] = mapped_column(Text, comment="AI原始响应")
     ai_call_time: Mapped[datetime] = mapped_column(DateTime, default=_DEFAULT_DATETIME, comment="AI调用时间")
 
-    final_score: Mapped[Decimal] = mapped_column(DECIMAL(5, 2), default=Decimal("0.00"), comment="最终分数")
+    final_score: Mapped[int] = mapped_column(Integer, default=0, comment="最终分数")
     final_rank: Mapped[int] = mapped_column(BigInteger, default=0, comment="最终排名")
     is_top3: Mapped[int] = mapped_column(TINYINT, default=0, comment="是否前三")
 
@@ -45,21 +48,22 @@ class MatchResult(Base):
     user_applied: Mapped[int] = mapped_column(TINYINT, default=0, comment="用户是否已投标")
     user_feedback_time: Mapped[datetime] = mapped_column(DateTime, default=_DEFAULT_DATETIME, comment="用户反馈时间")
 
-    status: Mapped[int] = mapped_column(TINYINT, default=1, comment="状态")
+    status: Mapped[int] = mapped_column(TINYINT, default=1, comment="状态") # 1:新增的匹配任务 20:完成粗筛 30:完成精准匹配
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, comment="创建时间")
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now,
                                                  comment="更新时间")
 
 
-class MatchResultDto(BaseModel):
+class MatchDto(BaseModel):
     """匹配结果数据类."""
     model_config = ConfigDict(from_attributes=True)
 
     id: Optional[int] = None
     supplier_id: int = 0
-    notice_id: int = 0
-    ai_match_score: Decimal = Decimal("0.00")
+    day: date = Field(default_factory=date.today)
+    filtered_notices: list[MatchNoticeScore] = []
+    ai_match_score: int = 0
     ai_match_level: str = ""
     ai_match_reasons: Optional[str] = None
     ai_risk_tips: Optional[str] = None
@@ -68,7 +72,7 @@ class MatchResultDto(BaseModel):
     ai_recommendation: str = ""
     ai_raw_response: Optional[str] = None
     ai_call_time: datetime = _DEFAULT_DATETIME
-    final_score: Decimal = Decimal("0.00")
+    final_score: int = 0
     final_rank: int = 0
     is_top3: int = 0
     push_status: int = 0

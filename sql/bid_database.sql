@@ -208,10 +208,8 @@ CREATE TABLE supplier_service_regions (
 CREATE TABLE match_results (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
 
-    -- 关联信息
     supplier_id BIGINT NOT NULL DEFAULT 0 COMMENT '供应商ID（对应supplier.id）',
-    notice_id BIGINT NOT NULL DEFAULT 0 COMMENT '公告ID（对应notices.id）',
-
+    filtered_notices JSON NULL COMMENT '粗筛后的公告',
 
     -- 第二层：AI精筛结果
     ai_match_score DECIMAL(5,2) NOT NULL DEFAULT 0.00 COMMENT 'AI匹配分数（0-100）',
@@ -251,10 +249,6 @@ CREATE TABLE match_results (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
     -- 索引
-    UNIQUE KEY uk_supplier_notice (supplier_id, notice_id),
     INDEX idx_supplier_id (supplier_id),
-    INDEX idx_notice_id (notice_id),
-    INDEX idx_ai_level (ai_match_level),
-    INDEX idx_final_score (final_score),
     INDEX idx_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='供应商-招标公告匹配结果表';

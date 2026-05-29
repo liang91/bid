@@ -14,4 +14,4 @@ from models.notice_attachment import NoticeAttachment, NoticeAttachmentDto
 from models.notice_package import NoticePackage, NoticePackageDto
 from models.supplier import Supplier, SupplierDto, SupplierQualification
 from models.supplier_service_region import SupplierServiceRegion, SupplierServiceRegionDto
-from models.match_result import MatchResult, MatchResultDto
+from models.match import MatchNoticeScore, Match, MatchDto

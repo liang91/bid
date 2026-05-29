@@ -10,5 +10,5 @@ class TestSupplierService:
         SupplierService.set_profile_embeddings()
 
     def test_recomment_notices(self):
-        res = SupplierService.match_notices(37)
+        res = SupplierService.filtered_notices(37)
         print(res)

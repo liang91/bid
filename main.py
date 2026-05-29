@@ -67,7 +67,7 @@ def main():
     if args.step in ("list", "html"):
         ClawerService.run("dfgg", args.step, args.size)
     elif args.step == "match":
-        SupplierService.match_notices(args.supplier)
+        SupplierService.filtered_notices(args.supplier)
     elif args.step == "parse":
         NoticeService.parse_htmls(args.size)
         logger.info("parse htmls done")
