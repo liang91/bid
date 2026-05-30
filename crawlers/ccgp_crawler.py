@@ -143,63 +143,6 @@ class CCGPCrawler:
         self.session = requests.Session()
         self.session.headers.update(DEFAULT_HEADERS)
 
-    def _get(self, url: str) -> str | None:
-        for attempt in range(3):
-            try:
-                resp = self.session.get(url, timeout=30)
-                resp.encoding = resp.apparent_encoding or "utf-8"
-                if resp.status_code == 200:
-                    return resp.text
-                logger.warning(f"[HTTP {resp.status_code}] {url}")
-            except requests.RequestException as e:
-                logger.warning(f"[请求失败] 第{attempt}次尝试: {url} - {e}")
-        return None
-
-    def _build_list_url(self, page: int) -> str:
-        if page <= 1:
-            return urljoin(self.list_base_url, "index.htm")
-        return urljoin(self.list_base_url, f"index_{page}.htm")
-
-    def _parse_list_page(self, html: str, list_url: str) -> list[NoticeDto]:
-        """解析列表页，返回招标公告 DTO 列表."""
-        notices = []
-        soup = BeautifulSoup(html, "lxml")
-        ul = soup.find("ul", class_="c_list_bid")
-        if not ul:
-            logger.warning(f"[解析] 未找到列表容器: {list_url}")
-            return notices
-
-        for li in ul.find_all("li"):
-            a = li.find("a", href=True)
-            if not a:
-                continue
-
-            dto = NoticeDto(
-                platform=self.PLATFORM,
-                part=self.PART_NAMES.get(self.part, ""),
-                title=a.get_text(strip=True),
-                url=urljoin(list_url, a["href"]),
-            )
-
-            if em_type := li.find("em", attrs={"rel": "bxlx"}):
-                dto.notice_type = em_type.get_text(strip=True)
-
-            notices.append(dto)
-
-        return notices
-
-    @staticmethod
-    def _is_tender_notice(dto: NoticeDto) -> bool:
-        if not dto.notice_type:
-            return False
-        nt = dto.notice_type.strip()
-        if "招标" not in nt:
-            return False
-        exclude_keywords = ("中标", "成交", "结果", "更正", "废标", "终止")
-        if any(kw in nt for kw in exclude_keywords):
-            return False
-        return True
-
     @staticmethod
     def save_cleaned_html(html: str) -> str:
         soup = BeautifulSoup(html, "lxml")
@@ -221,18 +164,27 @@ class CCGPCrawler:
     # 第1步：fetch_list
     # ========================================================================
     def fetch_list(self, pages: int = 1) -> dict:
+        # 获取最近爬取过的公告链接
+        latest = NoticeDao.get_latest(self.PLATFORM, self.PART_NAMES[self.part])
         all_notices = []
         for page in range(1, pages + 1):
             url = self._build_list_url(page)
-            html = self._get(url)
-            if not html:
-                continue
+            notices = self._parse_list_page(url)
 
-            notices = self._parse_list_page(html, url)
             all_notices.extend(notices)
+            reach_latest = False
+            if latest:
+                for idx, notice in enumerate(all_notices):
+                    if notice.url == latest.url:
+                        all_notices = all_notices[:idx]
+                        reach_latest = True
+                        break
             logger.info(f"[fetch_list] 第{page}页 获取 {len(notices)} 条，累计 {len(all_notices)} 条")
+            if reach_latest:
+                break
             time.sleep(1)
 
+        all_notices.reverse()
         tender_notices = [dto for dto in all_notices if self._is_tender_notice(dto)]
         excluded = len(all_notices) - len(tender_notices)
         if excluded > 0:
@@ -241,12 +193,9 @@ class CCGPCrawler:
         if tender_notices:
             NoticeDao.create(tender_notices)
             logger.info(f"[fetch_list] 入库完成: 新增 {len(tender_notices)} 条")
-            return {
-                "crawled": len(all_notices),
-                "inserted": len(tender_notices),
-            }
+            return {"inserted": len(tender_notices), }
 
-        return {"crawled": len(all_notices), "inserted": 0}
+        return {"inserted": 0}
 
     # ========================================================================
     # 第2步：fetch_html
@@ -272,3 +221,59 @@ class CCGPCrawler:
 
         logger.info(f"[fetch_html] 完成: 成功 {success} 条, 失败 {failed} 条")
         return {"total": len(notices), "success": success, "failed": failed}
+
+    def _get(self, url: str) -> str | None:
+        for attempt in range(3):
+            try:
+                resp = self.session.get(url, timeout=30)
+                resp.encoding = resp.apparent_encoding or "utf-8"
+                if resp.status_code == 200:
+                    return resp.text
+                logger.warning(f"[HTTP {resp.status_code}] {url}")
+            except requests.RequestException as e:
+                logger.warning(f"[请求失败] 第{attempt}次尝试: {url} - {e}")
+        return None
+
+    def _build_list_url(self, page: int) -> str:
+        if page <= 1:
+            return urljoin(self.list_base_url, "index.htm")
+        return urljoin(self.list_base_url, f"index_{page}.htm")
+
+    def _parse_list_page(self, list_url: str) -> list[NoticeDto]:
+        """解析列表页，返回招标公告 DTO 列表."""
+        html = self._get(list_url)
+        if html is None:
+            return []
+
+        notices = []
+        soup = BeautifulSoup(html, "lxml")
+        ul = soup.find("ul", class_="c_list_bid")
+        if not ul:
+            logger.warning(f"[解析] 未找到列表容器: {list_url}")
+            return notices
+
+        for li in ul.find_all("li"):
+            a = li.find("a", href=True)
+            if a is not None:
+                dto = NoticeDto(
+                    platform=self.PLATFORM,
+                    part=self.PART_NAMES.get(self.part, ""),
+                    title=a["title"].strip(),
+                    url=urljoin(list_url, a["href"]),
+                )
+                if em_type := li.find("em", attrs={"rel": "bxlx"}):
+                    dto.notice_type = em_type.get_text(strip=True)
+                notices.append(dto)
+        return notices
+
+    @staticmethod
+    def _is_tender_notice(dto: NoticeDto) -> bool:
+        if not dto.notice_type:
+            return False
+        nt = dto.notice_type.strip()
+        if "招标" not in nt:
+            return False
+        exclude_keywords = ("中标", "成交", "结果", "更正", "废标", "终止")
+        if any(kw in nt for kw in exclude_keywords):
+            return False
+        return True

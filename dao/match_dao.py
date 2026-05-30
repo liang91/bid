@@ -2,6 +2,7 @@ from dao import db
 from models import MatchDto, Match
 from sqlalchemy import delete, select, update
 
+
 class MatchDao:
     @staticmethod
     def get(match_id: int) -> MatchDto | None:
@@ -45,3 +46,4 @@ class MatchDao:
             )
             res = session.execute(stmt)
             return res.rowcount == 1
+

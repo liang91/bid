@@ -2,7 +2,7 @@ from loguru import logger
 from crawlers import CCGPCrawler
 
 
-class ClawerService:
+class CrawlerService:
 
     @staticmethod
     def run(part: str, step: str, size: int):
@@ -11,8 +11,8 @@ class ClawerService:
         if step == "list":
             logger.info(">>> 执行第1步: fetch_list (爬取列表页，保存概要信息)")
             result = crawler.fetch_list(pages=size)
-            logger.info(f"[结果] 爬取 {result['crawled']} 条, 入库 {result['inserted']} 条")
+            logger.info(f"[爬取结果] {result}")
         elif step == "html":
             logger.info(">>> 执行第2步: fetch_html (获取详情页 HTML，status=1 → 20)")
             result = crawler.fetch_html(limit=size)
-            logger.info(f"[结果] 共 {result['total']} 条, 成功 {result['success']} 条, 失败 {result['failed']} 条")
+            logger.info(f"[爬取结果] {result}")

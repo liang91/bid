@@ -15,7 +15,7 @@
 import argparse
 
 from loguru import logger
-from services import ClawerService, NoticeService, SupplierService
+from services import CrawlerService, NoticeService, SupplierService
 
 
 # ---------------------------------------------------------------------------
@@ -69,7 +69,7 @@ def main():
     args = parser.parse_args()
 
     if args.step in ("list", "html"):
-        ClawerService.run("dfgg", args.step, args.size)
+        CrawlerService.run("dfgg", args.step, args.size)
     elif args.step == "match":
         SupplierService.filtered_notices(args.supplier)
     elif args.step == "parse":
