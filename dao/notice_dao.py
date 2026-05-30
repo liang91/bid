@@ -70,12 +70,12 @@ class NoticeDao:
     # 按状态查询
     # -----------------------------------------------------------------------
     @staticmethod
-    def fetch_by_status(status: int, platform: str, limit: int = 100) -> List[NoticeDto]:
+    def fetch_by_status(status: int, platform: str, part: str, limit: int = 100) -> List[NoticeDto]:
         """按爬取状态查询公告记录."""
         with db() as session:
             result = session.execute(
                 select(Notice)
-                .where(Notice.status == status, Notice.platform == platform)
+                .where(Notice.status == status, Notice.platform == platform, Notice.part == part)
                 .order_by(Notice.id.asc())
                 .limit(limit)
             )

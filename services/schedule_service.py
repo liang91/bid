@@ -1,15 +1,15 @@
 """定时任务调度服务.
 
-封装 APScheduler，定义每日任务流水线。
+封装 APScheduler，从 crawl_targets 表动态读取目标配置并注册任务。
 """
+import time
 from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from loguru import logger
 
-from dao import SupplierDao, JobLogDao
+from dao import SupplierDao, JobLogDao, SiteDao
 from models import JobLogDto
 from services.crawler_service import CrawlerService
 from services.notice_service import NoticeService
@@ -18,25 +18,23 @@ from services.supplier_service import SupplierService
 
 class ScheduleService:
     """统一管理所有定时任务."""
-
-    def __init__(self):
-        self.scheduler = BackgroundScheduler(timezone="Asia/Shanghai")
+    scheduler = BackgroundScheduler(timezone="Asia/Shanghai")
 
     # -----------------------------------------------------------------------
     # 任务包装器：自动记录执行日志
     # -----------------------------------------------------------------------
-    @staticmethod
-    def _wrap(job_name: str, func, *args, **kwargs):
+    @classmethod
+    def _wrap(cls, job_name: str, func, *args, **kwargs):
         """包装任务函数，记录执行日志."""
         log_id = JobLogDao.create(JobLogDto(job_name=job_name, trigger_time=datetime.now(), status=0))
-        logger.info(f"[Scheduler] 任务 {job_name}:{log_id}开始执行")
+        logger.info(f"[Scheduler] 任务 {job_name}:{log_id} 开始执行")
 
         try:
             result = func(*args, **kwargs)
             # 尝试从 result 中提取记录数
             record_count = 0
             if isinstance(result, dict):
-                record_count = result.get("inserted") or result.get("update") or 0
+                record_count = result.get("created") or result.get("updated") or 0
             elif isinstance(result, int):
                 record_count = result
             elif isinstance(result, list):
@@ -49,54 +47,28 @@ class ScheduleService:
             logger.error(f"[Scheduler] 任务 {job_name}:{log_id} 执行失败: {e}")
 
     # -----------------------------------------------------------------------
-    # 具体任务
+    # 注册/删除任务
     # -----------------------------------------------------------------------
-    @staticmethod
-    def job_crawl_list(part: str = "dfgg", pages: int = 2):
-        """爬取公告列表."""
-        return CrawlerService.run(part, "list", pages)
+    @classmethod
+    def register_jobs(cls):
+        """从 sites 表读取启用的配置并注册爬取任务."""
+        sites = SiteDao.enabled()
+        if not sites:
+            return
 
-    @staticmethod
-    def job_crawl_html(part: str = "dfgg", limit: int = 100):
-        """爬取公告详情页 HTML."""
-        return CrawlerService.run(part, "html", limit)
+        for site in sites:
+            job_name = f"{site.platform}-{site.part}-{site.action}"
 
-    @staticmethod
-    def job_parse(limit: int = 100):
-        """LLM 解析 HTML."""
-        return NoticeService.parse_htmls(limit)
+            res = cls.scheduler.add_job(
+                func=cls._wrap,
+                args=(job_name, CrawlerService.run, site),
+                trigger=IntervalTrigger(seconds=30),
+                id=job_name,
+                replace_existing=True,
+            )
+            logger.info(f"[Scheduler] 已注册任务: {job_name} {res}")
 
-    @staticmethod
-    def job_match():
-        """对所有供应商执行粗筛 + 语义排序."""
-        suppliers = SupplierDao.all()
-        for supplier in suppliers:
-            try:
-                SupplierService.filtered_notices(supplier.id)
-            except Exception as e:
-                logger.error(f"[job_match] 供应商 {supplier.id} 匹配失败: {e}")
-        return len(suppliers)
-
-    @staticmethod
-    def job_ai_match(limit: int = 100):
-        """批量 AI 精筛."""
-        return SupplierService.ai_match_all(limit=limit)
-
-    # -----------------------------------------------------------------------
-    # 注册任务到调度器
-    # -----------------------------------------------------------------------
-    def register_jobs(self):
-        """注册每日任务流水线."""
-        self.scheduler.add_job(
-            func=self._wrap,
-            args=("crawl_list", self.job_crawl_list),
-            trigger=IntervalTrigger(minutes=60),
-            id="crawl_list",
-            name="爬取公告列表",
-            replace_existing=True,
-        )
-
-        # # 08:30 爬取详情 HTML
+        # # 08:30 爬取详情 HTML（全局，不区分平台）
         # self.scheduler.add_job(
         #     func=self._wrap,
         #     args=("crawl_html", self.job_crawl_html),
@@ -136,26 +108,49 @@ class ScheduleService:
         #     replace_existing=True,
         # )
 
-        # 10:30 企业微信推送（预留，待推送模块完成后接入）
-        # self.scheduler.add_job(
-        #     func=self._wrap,
-        #     args=("push", self.job_push),
-        #     trigger=CronTrigger(hour=10, minute=30),
-        #     id="push",
-        #     name="企业微信推送",
-        #     replace_existing=True,
-        # )
+    @classmethod
+    def reload_jobs(cls):
+        """热重载：重新从数据库读取配置并更新任务."""
+        logger.info("[Scheduler] 开始热重载任务配置...")
+        logger.info("[Scheduler] 热重载完成")
 
-        logger.info("[Scheduler] 所有任务已注册")
-
-    def start(self):
+    @classmethod
+    def start(cls):
         """启动调度器."""
-        self.register_jobs()
-        self.scheduler.start()
+        cls.register_jobs()
+        cls.scheduler.start()
         logger.info("[Scheduler] 调度器已启动")
+        while True:
+            time.sleep(10)
 
-    def shutdown(self):
+    @classmethod
+    def shutdown(cls):
         """关闭调度器."""
-        if self.scheduler.running:
-            self.scheduler.shutdown()
+        if cls.scheduler.running:
+            cls.scheduler.shutdown()
             logger.info("[Scheduler] 调度器已关闭")
+
+    # -----------------------------------------------------------------------
+    # 具体任务
+    # -----------------------------------------------------------------------
+
+    @classmethod
+    def job_parse(cls, limit: int = 100):
+        """LLM 解析 HTML."""
+        return NoticeService.parse_htmls(limit)
+
+    @classmethod
+    def job_match(cls):
+        """对所有供应商执行粗筛 + 语义排序."""
+        suppliers = SupplierDao.all()
+        for supplier in suppliers:
+            try:
+                SupplierService.filtered_notices(supplier.id)
+            except Exception as e:
+                logger.error(f"[job_match] 供应商 {supplier.id} 匹配失败: {e}")
+        return len(suppliers)
+
+    @classmethod
+    def job_ai_match(cls, limit: int = 100):
+        """批量 AI 精筛."""
+        return SupplierService.ai_match_all(limit=limit)

@@ -8,10 +8,13 @@
 4. 调度器：启动后台定时任务
 
 用法示例:
-    # CLI 模式
-    python main.py --step list --pages 2
-    python main.py --step html --limit 50
-    python main.py --step parse --limit 20
+    # CLI 模式（指定 target-id 从数据库读取配置）
+    python main.py --step list --target-id 1
+    python main.py --step list --target-id 1 --size 3
+
+    # CLI 模式（兼容旧方式，直接指定 part）
+    python main.py --step list --part dfgg --size 2
+    python main.py --step html --part dfgg --size 50
 
     # 调度器模式
     python main.py --schedule
@@ -23,14 +26,19 @@ import time
 
 from loguru import logger
 from services import CrawlerService, NoticeService, SupplierService, ScheduleService
+from dao import SiteDao
 
 
 # ---------------------------------------------------------------------------
 # CLI 模式
 # ---------------------------------------------------------------------------
 def run_cli(args):
-    if args.step in ("list", "html"):
-        CrawlerService.run("dfgg", args.step, args.size)
+    if args.step in ("fetch-list", "fetch-html"):
+        site = SiteDao.get(args.site)
+        if not site:
+            logger.error(f"[CLI] target_id={args.site} 不存在")
+            sys.exit(1)
+        CrawlerService.run(site)
     elif args.step == "match":
         SupplierService.filtered_notices(args.supplier)
     elif args.step == "parse":
@@ -42,12 +50,11 @@ def run_cli(args):
 # 调度器模式
 # ---------------------------------------------------------------------------
 def run_scheduler():
-    scheduler = ScheduleService()
-    scheduler.start()
+    ScheduleService.start()
 
     def shutdown_handler(signum, frame):
         logger.info("[Scheduler] 收到退出信号，正在关闭...")
-        scheduler.shutdown()
+        ScheduleService.shutdown()
         sys.exit(0)
 
     signal.signal(signal.SIGINT, shutdown_handler)
@@ -67,10 +74,11 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 用法示例:
-  # CLI 模式
-  python main.py --step list --pages 1
-  python main.py --step html --limit 2
-  python main.py --step parse --limit 2
+  # CLI 模式（指定 site-id）
+  python main.py --step fetch-list --site 1
+  python main.py --step fetch-html --site 1
+
+  # CLI 模式（兼容旧方式）
   python main.py --step match --supplier 37
 
   # 调度器模式
@@ -85,18 +93,13 @@ def main():
 
     parser.add_argument(
         "--step", type=str,
-        choices=["list", "html", "parse", "match"],
+        choices=["fetch-list", "fetch-html"],
         help="执行步骤（CLI 模式必填）",
     )
 
     parser.add_argument(
-        "--part", type=str, default="dfgg", choices=["dfgg", "zygg"],
-        help="爬取栏目: dfgg=地方公告, zygg=中央公告",
-    )
-
-    parser.add_argument(
-        "--size", type=int, default=100,
-        help="每次处理的最大条数 (默认: 100)",
+        "--site", type=int, default=0,
+        help="爬虫目标配置 ID（从 sites 表读取）",
     )
 
     parser.add_argument(

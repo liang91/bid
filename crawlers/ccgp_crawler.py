@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup, Comment
 
 import util
 from dao import NoticeDao
-from models import NoticeDto
+from models import NoticeDto, SiteDto
 
 DEFAULT_HEADERS = {
     "User-Agent": (
@@ -30,19 +30,6 @@ class CCGPCrawler:
     - 地方公告 (dfgg): https://www.ccgp.gov.cn/cggg/dfgg/
     - 中央公告 (zygg): https://www.ccgp.gov.cn/cggg/zygg/
     """
-
-    PLATFORM = "中国政府采购网"
-    BASE_URL = "https://www.ccgp.gov.cn"
-
-    PARTS = {
-        "dfgg": "/cggg/dfgg/",
-        "zygg": "/cggg/zygg/",
-    }
-
-    PART_NAMES = {
-        "dfgg": "地方公告",
-        "zygg": "中央公告",
-    }
 
     PROMPT = """你是一个专业的政府采购网招标公告信息提取助手，你的任务是从给定的政府采购公告页HTML中，提取关键的招标信息。
 需要提取的字段如下（字段名必须严格与下面列出的英文名称一致；如果文本中确实没有该信息，不要编造）：
@@ -130,42 +117,17 @@ class CCGPCrawler:
 
 """
 
-    def __init__(
-            self,
-            part: str = "dfgg",
-    ):
-        if part not in self.PARTS:
-            raise ValueError(f"不支持的栏目: {part}，可选: {list(self.PARTS.keys())}")
-
-        self.part = part
-        self.part_path = self.PARTS[part]
-        self.list_base_url = urljoin(self.BASE_URL, self.part_path)
+    def __init__(self, site: SiteDto):
+        self.site = site
         self.session = requests.Session()
         self.session.headers.update(DEFAULT_HEADERS)
-
-    @staticmethod
-    def save_cleaned_html(html: str) -> str:
-        soup = BeautifulSoup(html, "lxml")
-        main = soup.find('div', class_='vF_deail_maincontent')
-        # 去掉js/css代码
-        for tag in main.find_all(['script', 'style']):
-            tag.decompose()
-        # 去掉评论
-        for comment in main.find_all(string=lambda text: isinstance(text, Comment)):
-            comment.extract()
-        # 去掉标签属性
-        for tag in main.find_all():
-            tag.attrs = {k: v for k, v in tag.attrs.items() if k == 'href'}
-        content = str(main)
-        content = content.replace("<span>", "").replace("</span>", "")
-        return util.save_html(content)
 
     # ========================================================================
     # 第1步：fetch_list
     # ========================================================================
-    def fetch_list(self, pages: int = 1) -> dict:
+    def fetch_list(self, pages: int = 10) -> dict:
         # 获取最近爬取过的公告链接
-        latest = NoticeDao.get_latest(self.PLATFORM, self.PART_NAMES[self.part])
+        latest = NoticeDao.get_latest(self.site.platform, self.site.part)
         all_notices = []
         for page in range(1, pages + 1):
             url = self._build_list_url(page)
@@ -193,34 +155,55 @@ class CCGPCrawler:
         if tender_notices:
             NoticeDao.create(tender_notices)
             logger.info(f"[fetch_list] 入库完成: 新增 {len(tender_notices)} 条")
-            return {"inserted": len(tender_notices), }
+            return {"created": len(tender_notices), }
 
-        return {"inserted": 0}
+        return {"created": 0}
 
     # ========================================================================
     # 第2步：fetch_html
     # ========================================================================
     def fetch_html(self, limit: int = 100) -> dict:
-        notices = NoticeDao.fetch_by_status(status=1, platform=self.PLATFORM, limit=limit)
-        if not notices:
-            logger.info("[fetch_html] 没有待获取 HTML 的记录")
-            return {"total": 0, "success": 0, "failed": 0}
-
-        logger.info(f"[fetch_html] 共 {len(notices)} 条待处理")
         success = failed = 0
+        while True:
+            notices = NoticeDao.fetch_by_status(status=1, platform=self.site.platform, part=self.site.part, limit=limit)
+            if not notices:
+                logger.info("[fetch_html] 没有待获取 HTML 的记录")
+                return {"total": 0, "success": 0, "failed": 0}
 
-        for notice in notices:
-            html = self._get(notice.url)
-            if html:
-                html_path = self.save_cleaned_html(html)
-                NoticeDao.update_html(notice.id, html_path)
-                success += 1
-                time.sleep(1)
-            else:
-                failed += 1
+            logger.info(f"[fetch_html] 共 {len(notices)} 条待处理")
+
+            for notice in notices:
+                html = self._get(notice.url)
+                if html:
+                    html_path = self.save_cleaned_html(html)
+                    NoticeDao.update_html(notice.id, html_path)
+                    success += 1
+                    time.sleep(1)
+                else:
+                    failed += 1
+
+            if len(notices) < limit:
+                break
 
         logger.info(f"[fetch_html] 完成: 成功 {success} 条, 失败 {failed} 条")
-        return {"total": len(notices), "success": success, "failed": failed}
+        return {"updated": success}
+
+    @staticmethod
+    def save_cleaned_html(html: str) -> str:
+        soup = BeautifulSoup(html, "lxml")
+        main = soup.find('div', class_='vF_deail_maincontent')
+        # 去掉js/css代码
+        for tag in main.find_all(['script', 'style']):
+            tag.decompose()
+        # 去掉评论
+        for comment in main.find_all(string=lambda text: isinstance(text, Comment)):
+            comment.extract()
+        # 去掉标签属性
+        for tag in main.find_all():
+            tag.attrs = {k: v for k, v in tag.attrs.items() if k == 'href'}
+        content = str(main)
+        content = content.replace("<span>", "").replace("</span>", "")
+        return util.save_html(content)
 
     def _get(self, url: str) -> str | None:
         for attempt in range(3):
@@ -236,8 +219,8 @@ class CCGPCrawler:
 
     def _build_list_url(self, page: int) -> str:
         if page <= 1:
-            return urljoin(self.list_base_url, "index.htm")
-        return urljoin(self.list_base_url, f"index_{page}.htm")
+            return urljoin(self.site.url, "index.htm")
+        return urljoin(self.site.url, f"index_{page}.htm")
 
     def _parse_list_page(self, list_url: str) -> list[NoticeDto]:
         """解析列表页，返回招标公告 DTO 列表."""
@@ -256,8 +239,8 @@ class CCGPCrawler:
             a = li.find("a", href=True)
             if a is not None:
                 dto = NoticeDto(
-                    platform=self.PLATFORM,
-                    part=self.PART_NAMES.get(self.part, ""),
+                    platform=self.site.platform,
+                    part=self.site.part,
                     title=a["title"].strip(),
                     url=urljoin(list_url, a["href"]),
                 )
