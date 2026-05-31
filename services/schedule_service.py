@@ -27,7 +27,7 @@ class ScheduleService:
     def _wrap(cls, job_name: str, func, *args, **kwargs):
         """包装任务函数，记录执行日志."""
         log_id = JobLogDao.create(JobLogDto(job_name=job_name, trigger_time=datetime.now(), status=0))
-        logger.info(f"[Scheduler] 任务 {job_name}:{log_id} 开始执行")
+        logger.info(f"{job_name}-{log_id} 开始执行")
 
         try:
             result = func(*args, **kwargs)
@@ -41,10 +41,10 @@ class ScheduleService:
                 record_count = len(result)
 
             JobLogDao.update(log_id, status=1, record_count=record_count, message="success")
-            logger.info(f"[Scheduler] 任务 {job_name}:{log_id} 执行成功")
+            logger.info(f"{job_name}-{log_id} 执行成功")
         except Exception as e:
             JobLogDao.update(log_id, status=2, message=str(e))
-            logger.error(f"[Scheduler] 任务 {job_name}:{log_id} 执行失败: {e}")
+            logger.error(f"{job_name}:{log_id} 执行失败: {e}")
 
     # -----------------------------------------------------------------------
     # 注册/删除任务
@@ -53,20 +53,17 @@ class ScheduleService:
     def register_jobs(cls):
         """从 sites 表读取启用的配置并注册爬取任务."""
         sites = SiteDao.enabled()
-        if not sites:
-            return
-
         for site in sites:
-            job_name = f"{site.platform}-{site.part}-{site.action}"
+            job_name = site.job_name()
 
-            res = cls.scheduler.add_job(
+            cls.scheduler.add_job(
                 func=cls._wrap,
                 args=(job_name, CrawlerService.run, site),
                 trigger=IntervalTrigger(seconds=30),
                 id=job_name,
                 replace_existing=True,
             )
-            logger.info(f"[Scheduler] 已注册任务: {job_name} {res}")
+            logger.info(f"{job_name}：已注册任务")
 
         # # 08:30 爬取详情 HTML（全局，不区分平台）
         # self.scheduler.add_job(
@@ -111,15 +108,15 @@ class ScheduleService:
     @classmethod
     def reload_jobs(cls):
         """热重载：重新从数据库读取配置并更新任务."""
-        logger.info("[Scheduler] 开始热重载任务配置...")
-        logger.info("[Scheduler] 热重载完成")
+        logger.info("开始热重载任务配置...")
+        logger.info("热重载完成")
 
     @classmethod
     def start(cls):
         """启动调度器."""
         cls.register_jobs()
         cls.scheduler.start()
-        logger.info("[Scheduler] 调度器已启动")
+        logger.info("调度器已启动")
         while True:
             time.sleep(10)
 
@@ -128,7 +125,7 @@ class ScheduleService:
         """关闭调度器."""
         if cls.scheduler.running:
             cls.scheduler.shutdown()
-            logger.info("[Scheduler] 调度器已关闭")
+            logger.info("调度器已关闭")
 
     # -----------------------------------------------------------------------
     # 具体任务

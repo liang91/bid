@@ -19,7 +19,8 @@ class Site(Base):
     platform: Mapped[str] = mapped_column(String(64), default="", comment="网站名称，如：中国政府采购网")
     part: Mapped[str] = mapped_column(String(32), default="", comment="栏目名称，如：地方公告")
     action: Mapped[str] = mapped_column(String(32), default="", comment="执行的动作，如：fetch_list,fetch_html")
-    crawler: Mapped[str] = mapped_column(String(128), default="", comment="爬虫类全路径，如：crawlers.ccgp_crawler.CCGPCrawler")
+    crawler: Mapped[str] = mapped_column(String(128), default="",
+                                         comment="爬虫类全路径，如：crawlers.ccgp_crawler.CCGPCrawler")
     url: Mapped[str] = mapped_column(String(256), default="", comment="网站基础URL")
 
     enabled: Mapped[int] = mapped_column(TINYINT, default=1, comment="是否启用：0禁用 1启用")
@@ -30,7 +31,8 @@ class Site(Base):
     delay: Mapped[int] = mapped_column(Integer, default=1, comment="请求间隔（秒）")
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, comment="创建时间")
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now, comment="更新时间")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now,
+                                                 comment="更新时间")
 
 
 class SiteDto(BaseModel):
@@ -53,3 +55,6 @@ class SiteDto(BaseModel):
     fetch_detail: int = 1
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
+
+    def job_name(self) -> str:
+        return f"{self.id}-{self.platform}-{self.part}-{self.action}"

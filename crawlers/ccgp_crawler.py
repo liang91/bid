@@ -126,6 +126,7 @@ class CCGPCrawler:
     # 第1步：fetch_list
     # ========================================================================
     def fetch_list(self, pages: int = 10) -> dict:
+        job_name = self.site.job_name()
         # 获取最近爬取过的公告链接
         latest = NoticeDao.get_latest(self.site.platform, self.site.part)
         all_notices = []
@@ -141,7 +142,7 @@ class CCGPCrawler:
                         all_notices = all_notices[:idx]
                         reach_latest = True
                         break
-            logger.info(f"[fetch_list] 第{page}页 获取 {len(notices)} 条，累计 {len(all_notices)} 条")
+            logger.info(f"{job_name} 第{page}页 获取 {len(notices)} 条，累计 {len(all_notices)} 条")
             if reach_latest:
                 break
             time.sleep(1)
@@ -150,11 +151,11 @@ class CCGPCrawler:
         tender_notices = [dto for dto in all_notices if self._is_tender_notice(dto)]
         excluded = len(all_notices) - len(tender_notices)
         if excluded > 0:
-            logger.info(f"[fetch_list] 排除非招标公告 {excluded} 条，保留 {len(tender_notices)} 条")
+            logger.info(f"{job_name} 排除非招标公告 {excluded} 条，保留 {len(tender_notices)} 条")
 
         if tender_notices:
             NoticeDao.create(tender_notices)
-            logger.info(f"[fetch_list] 入库完成: 新增 {len(tender_notices)} 条")
+            logger.info(f"{job_name} 入库完成: 新增 {len(tender_notices)} 条")
             return {"created": len(tender_notices), }
 
         return {"created": 0}
@@ -163,14 +164,15 @@ class CCGPCrawler:
     # 第2步：fetch_html
     # ========================================================================
     def fetch_html(self, limit: int = 100) -> dict:
+        job_name = self.site.job_name()
         success = failed = 0
         while True:
             notices = NoticeDao.fetch_by_status(status=1, platform=self.site.platform, part=self.site.part, limit=limit)
             if not notices:
-                logger.info("[fetch_html] 没有待获取 HTML 的记录")
-                return {"total": 0, "success": 0, "failed": 0}
+                logger.info(f"{job_name} 没有待获取 HTML 的记录")
+                return {"updated": 0}
 
-            logger.info(f"[fetch_html] 共 {len(notices)} 条待处理")
+            logger.info(f"{job_name} 共 {len(notices)} 条待处理")
 
             for notice in notices:
                 html = self._get(notice.url)
@@ -185,7 +187,7 @@ class CCGPCrawler:
             if len(notices) < limit:
                 break
 
-        logger.info(f"[fetch_html] 完成: 成功 {success} 条, 失败 {failed} 条")
+        logger.info(f"{job_name} 完成: 成功 {success} 条, 失败 {failed} 条")
         return {"updated": success}
 
     @staticmethod

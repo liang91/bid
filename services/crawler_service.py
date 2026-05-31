@@ -8,8 +8,9 @@ class CrawlerService:
     @staticmethod
     def get_crawler(site: SiteDto):
         """根据 target 配置动态加载爬虫类."""
+        job_name = site.job_name()
         if not site.crawler:
-            logger.warning(f"[CrawlerService] {site.name}/{site.part} 未配置 crawler")
+            logger.warning(f"{job_name}未配置 crawler")
             return
 
         try:
@@ -17,22 +18,20 @@ class CrawlerService:
             cls = getattr(module, site.crawler)
             return cls(site)
         except Exception as e:
-            logger.error(f"[CrawlerService] 加载爬虫类失败 {site.crawler}: {e}")
+            logger.error(f"{job_name}加载爬虫类失败{site.crawler}: {e}")
             return None
 
     @staticmethod
     def run(site: SiteDto) -> dict:
+        job_name = site.job_name()
         crawler = CrawlerService.get_crawler(site)
 
+        logger.info(f"{job_name}开始爬取")
         if site.action == "fetch_list":
-            logger.info(f">>> 执行爬取列表: target={site.platform}/{site.part}")
             result = crawler.fetch_list()
-            logger.info(f"[爬取结果] {result}")
-            return result
         elif site.action == "fetch_html":
-            logger.info(f">>> 执行爬取详情页HTML: target={site.platform}/{site.part}")
             result = crawler.fetch_html()
-            logger.info(f"[爬取结果] {result}")
-            return result
         else:
             raise ValueError(f"不支持的的动作")
+        logger.info(f"{job_name}爬取结果:{result}")
+        return result
