@@ -285,7 +285,15 @@ CREATE TABLE sites (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='爬虫目标网站配置表';
 
 -- 默认数据：中国政府采购网
-INSERT INTO sites (platform, part, crawler, url, enabled, schedule_type, schedule_config, pages, delay, fetch_detail, notice_type_filter, priority)
+INSERT INTO sites (platform, part, action, crawler, url, enabled, schedule_type, schedule_config, pages, delay, fetch_detail, notice_type_filter, priority)
 VALUES
-('中国政府采购网', '地方公告', 'crawlers.ccgp_crawler.CCGPCrawler', 'https://www.ccgp.gov.cn', 1, 'interval', '{"minutes": 60}', 2, 1.00, 0, '招标公告', 10),
-('中国政府采购网', '中央公告', 'crawlers.ccgp_crawler.CCGPCrawler', 'https://www.ccgp.gov.cn', 1, 'interval', '{"minutes": 60}', 2, 1.00, 0, '招标公告', 10);
+('中国政府采购网', '地方公告', 'fetch_list', 'crawlers.ccgp_crawler.CCGPCrawler', 'https://www.ccgp.gov.cn', 1, 'interval', '{"minutes": 60}', 2, 1, 0, '招标公告', 10),
+('中国政府采购网', '中央公告', 'fetch_list', 'crawlers.ccgp_crawler.CCGPCrawler', 'https://www.ccgp.gov.cn', 1, 'interval', '{"minutes": 60}', 2, 1, 0, '招标公告', 10),
+('中国政府采购网', '地方公告', 'fetch_html', 'crawlers.ccgp_crawler.CCGPCrawler', 'https://www.ccgp.gov.cn', 1, 'interval', '{"minutes": 60}', 2, 1, 0, '招标公告', 10),
+('中国政府采购网', '中央公告', 'fetch_html', 'crawlers.ccgp_crawler.CCGPCrawler', 'https://www.ccgp.gov.cn', 1, 'interval', '{"minutes": 60}', 2, 1, 0, '招标公告', 10),
+
+-- 北京市公共资源交易服务平台（市级，已聚合各区公告）
+('北京市公共资源交易服务平台', '工程建设招标公告', 'fetch_list', 'BJGGZYCrawler', 'https://ggzyfw.beijing.gov.cn/jyxxggjtbyqs/', 1, 'interval', '{"minutes": 60}', 3, 1, 0, '招标公告', 10),
+('北京市公共资源交易服务平台', '工程建设招标公告', 'fetch_html', 'BJGGZYCrawler', 'https://ggzyfw.beijing.gov.cn/jyxxggjtbyqs/', 1, 'interval', '{"minutes": 60}', 3, 1, 0, '招标公告', 10),
+('北京市公共资源交易服务平台', '政府采购招标公告', 'fetch_list', 'BJGGZYCrawler', 'https://ggzyfw.beijing.gov.cn/jyxxcggg/', 1, 'interval', '{"minutes": 60}', 3, 1, 0, '招标公告', 10),
+('北京市公共资源交易服务平台', '政府采购招标公告', 'fetch_html', 'BJGGZYCrawler', 'https://ggzyfw.beijing.gov.cn/jyxxcggg/', 1, 'interval', '{"minutes": 60}', 3, 1, 0, '招标公告', 10);
