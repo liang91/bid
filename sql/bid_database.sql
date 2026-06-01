@@ -270,3 +270,48 @@ CREATE TABLE job_logs (
     INDEX idx_status (status),
     INDEX idx_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='定时任务执行日志表';
+
+-- ------------------------------------------------------------
+-- 爬虫目标网站配置表 sites
+-- ------------------------------------------------------------
+CREATE TABLE sites (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+
+    platform VARCHAR(64) NOT NULL DEFAULT '' COMMENT '网站名称，如：中国政府采购网',
+    part VARCHAR(32) NOT NULL DEFAULT '' COMMENT '栏目代码，如：地方公告',
+    action VARCHAR(32) NOT NULL DEFAULT '' COMMENT '执行动作，如：fetch_list,fetch_html',
+    crawler VARCHAR(128) NOT NULL DEFAULT '' COMMENT '爬虫类类名，如：CCGPCrawler',
+    url VARCHAR(256) NOT NULL DEFAULT '' COMMENT '网站栏目对应的URL',
+
+    enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用：0禁用 1启用',
+    schedule_type VARCHAR(16) NOT NULL DEFAULT 'interval' COMMENT '调度类型：interval/cron',
+    schedule_config JSON COMMENT '调度配置，如：{minutes: 60} 或 {hour: 8, minute: 30}',
+
+    pages INT NOT NULL DEFAULT 1 COMMENT '每次爬取页数',
+    delay INT NOT NULL DEFAULT 60 COMMENT '请求间隔（秒）',
+    fetch_detail TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否爬取详情页',
+    notice_type_filter VARCHAR(32) NOT NULL DEFAULT '' COMMENT '公告类型过滤',
+
+    extra_config JSON COMMENT '额外配置（各爬虫自定义参数）',
+    priority INT NOT NULL DEFAULT 0 COMMENT '优先级，数字越大越优先',
+
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    UNIQUE KEY uk_site_part (platform, part),
+    INDEX idx_enabled (enabled)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='爬虫目标网站配置表';
+
+-- 默认数据：中国政府采购网
+INSERT INTO sites (platform, part, action, crawler, url, enabled, schedule_type, schedule_config, pages, delay, fetch_detail, notice_type_filter, priority)
+VALUES
+('中国政府采购网', '地方公告', 'fetch_list', 'crawlers.ccgp_crawler.CCGPCrawler', 'https://www.ccgp.gov.cn', 1, 'interval', '{"minutes": 60}', 2, 1, 0, '招标公告', 10),
+('中国政府采购网', '中央公告', 'fetch_list', 'crawlers.ccgp_crawler.CCGPCrawler', 'https://www.ccgp.gov.cn', 1, 'interval', '{"minutes": 60}', 2, 1, 0, '招标公告', 10),
+('中国政府采购网', '地方公告', 'fetch_html', 'crawlers.ccgp_crawler.CCGPCrawler', 'https://www.ccgp.gov.cn', 1, 'interval', '{"minutes": 60}', 2, 1, 0, '招标公告', 10),
+('中国政府采购网', '中央公告', 'fetch_html', 'crawlers.ccgp_crawler.CCGPCrawler', 'https://www.ccgp.gov.cn', 1, 'interval', '{"minutes": 60}', 2, 1, 0, '招标公告', 10),
+
+-- 北京市公共资源交易服务平台（市级，已聚合各区公告）
+('北京市公共资源交易服务平台', '工程建设招标公告', 'fetch_list', 'BJGGZYCrawler', 'https://ggzyfw.beijing.gov.cn/jyxxggjtbyqs/', 1, 'interval', '{"minutes": 60}', 3, 1, 0, '招标公告', 10),
+('北京市公共资源交易服务平台', '工程建设招标公告', 'fetch_html', 'BJGGZYCrawler', 'https://ggzyfw.beijing.gov.cn/jyxxggjtbyqs/', 1, 'interval', '{"minutes": 60}', 3, 1, 0, '招标公告', 10),
+('北京市公共资源交易服务平台', '政府采购招标公告', 'fetch_list', 'BJGGZYCrawler', 'https://ggzyfw.beijing.gov.cn/jyxxcggg/', 1, 'interval', '{"minutes": 60}', 3, 1, 0, '招标公告', 10),
+('北京市公共资源交易服务平台', '政府采购招标公告', 'fetch_html', 'BJGGZYCrawler', 'https://ggzyfw.beijing.gov.cn/jyxxcggg/', 1, 'interval', '{"minutes": 60}', 3, 1, 0, '招标公告', 10);

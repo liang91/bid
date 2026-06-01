@@ -54,3 +54,4 @@ from dao.supplier_dao import SupplierDao
 from dao.supplier_service_region_dao import SupplierServiceRegionDao
 from dao.match_dao import MatchDao
 from dao.job_log_dao import JobLogDao
+from dao.site_dao import SiteDao

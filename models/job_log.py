@@ -17,7 +17,7 @@ class JobLog(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True, comment="主键ID")
 
     job_name: Mapped[str] = mapped_column(String(64), default="", comment="任务名称")
-    trigger_time: Mapped[datetime] = mapped_column(DateTime, default=_DEFAULT_DATETIME, comment="计划触发时间")
+    trigger_time: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, comment="计划触发时间")
     status: Mapped[int] = mapped_column(TINYINT, default=0, comment="状态: 0=运行中 1=成功 2=失败")
     record_count: Mapped[int] = mapped_column(BigInteger, default=0, comment="处理记录数")
     message: Mapped[Optional[str]] = mapped_column(Text, comment="日志消息/异常堆栈")
@@ -31,7 +31,7 @@ class JobLogDto(BaseModel):
 
     id: Optional[int] = None
     job_name: str = ""
-    trigger_time: datetime = _DEFAULT_DATETIME
+    trigger_time: datetime = Field(default_factory=datetime.now)
     status: int = 0
     record_count: int = 0
     message: str = ""

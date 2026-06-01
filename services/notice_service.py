@@ -3,7 +3,7 @@ from concurrent.futures.thread import ThreadPoolExecutor
 from loguru import logger
 
 import util
-from crawlers import CCGPCrawler
+from crawlers import CCGPCrawler, BJGGZYCrawler
 from dao import NoticeDao, NoticeAttachmentDao, NoticePackageDao, NoticeQualificationDao
 from models import NoticeAttachmentDto, NoticePackageDto, NoticeQualificationDto, NoticeDto
 from providers import LLMParser, LLMEmbedding
@@ -17,7 +17,8 @@ class NoticeService:
             return False
 
         try:
-            data = LLMParser.parse(CCGPCrawler.PROMPT + util.get_html(notice.html))
+            prompt = BJGGZYCrawler.PROMPT if notice.platform == "北京市公共资源交易服务平台" else CCGPCrawler.PROMPT
+            data = LLMParser.parse(prompt + util.get_html(notice.html))
             attachments = data.pop("notice_attachments", None) or []
             attachments = [NoticeAttachmentDto(**attachment) for attachment in attachments]
 

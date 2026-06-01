@@ -1,10 +1,18 @@
-"""中国政府采购网爬虫实现."""
+"""北京市公共资源交易服务平台爬虫.
+
+支持栏目:
+- 工程建设招标公告: https://ggzyfw.beijing.gov.cn/jyxxggjtbyqs/
+- 政府采购招标公告: https://ggzyfw.beijing.gov.cn/jyxxcggg/
+"""
 import time
 from urllib.parse import urljoin
 
 from loguru import logger
 import requests
 from bs4 import BeautifulSoup, Comment
+from requests.adapters import HTTPAdapter
+from urllib3.poolmanager import PoolManager
+from urllib3.util.ssl_ import create_urllib3_context
 
 import util
 from dao import NoticeDao
@@ -23,19 +31,30 @@ DEFAULT_HEADERS = {
 }
 
 
-class CCGPCrawler:
-    """中国政府采购网爬虫.
+class _BJGGZYSSLAdapter(HTTPAdapter):
+    """适配北京市公共资源交易平台不兼容的 TLS 配置."""
 
-    支持爬取的栏目:
-    - 地方公告 (dfgg): https://www.ccgp.gov.cn/cggg/dfgg/
-    - 中央公告 (zygg): https://www.ccgp.gov.cn/cggg/zygg/
+    def init_poolmanager(self, *args, **kwargs):
+        ctx = create_urllib3_context()
+        # 降级 cipher 以兼容服务器旧的椭圆曲线配置
+        ctx.set_ciphers("AES256-SHA256:AES128-SHA256:AES256-SHA:AES128-SHA")
+        ctx.check_hostname = False
+        kwargs["ssl_context"] = ctx
+        return super().init_poolmanager(*args, **kwargs)
+
+
+class BJGGZYCrawler:
+    """北京市公共资源交易服务平台爬虫.
+
+    市级平台已聚合各区公告（如【昌平区】【通州区】），
+    因此爬取市级栏目即可覆盖市+区两级信息。
     """
 
-    PROMPT = """你是一个专业的政府采购网招标公告信息提取助手，你的任务是从给定的政府采购公告页HTML中，提取关键的招标信息。
+    PROMPT = """你是一个专业的公共资源交易平台招标公告信息提取助手，你的任务是从给定的招标公告页HTML中，提取关键的招标信息。
 需要提取的字段如下（字段名必须严格与下面列出的英文名称一致；如果文本中确实没有该信息，不要编造）：
-    
+
 - project_name: 采购项目名称
-- project_no: 项目编号（如"JXHCGC2026-GZ-J006"）
+- project_no: 项目编号
 - purchase_plan_no: 采购计划编号
 - method: 采购方式（如"公开招标"、"竞争性谈判"、"询价"、"单一来源"）
 - budget: 预算金额
@@ -44,20 +63,20 @@ class CCGPCrawler:
 - join_bid_max_members: 联合投标最多参与方数量，整数类型，默认值：1
 - sme_oriented: 是否专门面向中小企业: 0-不是 1-是，整数类型，默认值：0
 
-- region_province: 采购方所在省份 如:"江西"、"北京"、"香港","新疆"（省级自治区用省名，比如：新疆维吾尔自治区对应新疆）
-- region_city: 采购方所在城市 如:"赣州"、"成都"，
-- region_district: 采购方所在区/县（如:"新安县","青羊区"、"铜官区"），如果是县级市则填县级市名称
+- region_province: 采购方所在省份，固定为"北京"
+- region_city: 采购方所在城市，固定为"北京"
+- region_district: 采购方所在区/县（如"昌平区"、"通州区"），从公告正文中提取
 
-- notice_date: 公告发布时间，严格格式化为 YYYY-MM-DD HH:MM（如"2026-05-15 16:55"），如果只到日期则输出 YYYY-MM-DD
+- notice_date: 公告发布时间，严格格式化为 YYYY-MM-DD HH:MM
 - doc_obtain_start: 采购文件获取开始时间，格式 YYYY-MM-DD HH:MM
 - doc_obtain_end: 采购文件获取截止时间，格式 YYYY-MM-DD HH:MM
 - bid_deadline: 投标截止时间/响应文件提交截止时间，格式 YYYY-MM-DD HH:MM
 - bid_open_time: 开标时间，格式 YYYY-MM-DD HH:MM
 
-- bid_platform: 投标平台/开标地点/获取招标文件的地点
+- bid_platform: 投标平台/开标地点
 - doc_price: 招标文件费用
 
-- purchaser_name: 采购人名称
+- purchaser_name: 采购人/招标人名称
 - purchaser_address: 采购人地址
 - purchaser_contact_person: 采购人联系人姓名
 - purchaser_contact_phone: 采购人联系电话
@@ -65,26 +84,23 @@ class CCGPCrawler:
 - agency_address: 代理机构地址
 - agency_contact_person: 代理机构联系人姓名
 - agency_contact_phone: 代理机构联系电话
-
 - project_contact_person: 项目联系人姓名
 - project_contact_phone: 项目联系电话
 
 - qualification_summary: 申请方/供应商资质要求摘要
 - industry_tags: [
     "行业大类标签",
-    "行业细分标签1",
-    "行业细分标签2",
-    "行业细分标签3"
+    "行业细分标签1"
 ] 所需供应商的行业标签（字符串列表类型）
 
 - abstract: 公告内容摘要，500字以内
-- supplier_profile: 所需供应商的画像，要包含：供应商需要在哪些行业（行业大类标签、行业细分标签）、所需的资质/证书、供应商要具备能力等，300字以内，备注：这个字段会用于和供应商信息做语义匹配，用于筛选符合招标要求的供应商
+- supplier_profile: 所需供应商的画像，要包含：供应商需要在哪些行业、所需的资质/证书、供应商要具备能力等，300字以内
 
-- notice_attachments: [ 
+- notice_attachments: [
     {
         name: 附件名,
         url: 附件链接
-    } 附件详情
+    }
 ] 公告附件列表
 
 - notice_packages: [
@@ -106,11 +122,11 @@ class CCGPCrawler:
 ] 供应商/申请方资质要求列表
 
 返回格式要求：
-1. 只返回纯 JSON 对象，不要包含 markdown 代码块标记（如 ```json）
+1. 只返回纯 JSON 对象，不要包含 markdown 代码块标记
 2. 不要添加任何解释性文字
 3. 所有字段名必须严格使用上面列出的英文名称
 4. 字符串值保持原文，不要翻译或改写
-5. 预算或费用金额统一换算成元，字符串格式，最多保留两位非0小数，如果都是0，不保留小数位,如果解析不出来默认值是0
+5. 预算或费用金额统一换算成元，字符串格式，最多保留两位非0小数，如果都是0，不保留小数位
 6. 对于日期，如果时间是24:00,请把它变成23:59
 
 你要解析的公告页HTML内容如下：
@@ -121,13 +137,14 @@ class CCGPCrawler:
         self.site = site
         self.session = requests.Session()
         self.session.headers.update(DEFAULT_HEADERS)
+        # 北京市公共资源交易平台 TLS 兼容处理
+        self.session.mount("https://", _BJGGZYSSLAdapter())
 
     # ========================================================================
     # 第1步：fetch_list
     # ========================================================================
     def fetch_list(self, pages: int = 10) -> dict:
         job_name = self.site.job_name()
-        # 获取最近爬取过的公告链接
         latest = NoticeDao.get_latest(self.site.platform, self.site.part)
         all_notices = []
         for page in range(1, pages + 1):
@@ -156,7 +173,7 @@ class CCGPCrawler:
         if tender_notices:
             NoticeDao.create(tender_notices)
             logger.info(f"{job_name} 入库完成: 新增 {len(tender_notices)} 条")
-            return {"created": len(tender_notices), }
+            return {"created": len(tender_notices)}
 
         return {"created": 0}
 
@@ -167,7 +184,9 @@ class CCGPCrawler:
         job_name = self.site.job_name()
         success = failed = 0
         while True:
-            notices = NoticeDao.fetch_by_status(status=1, platform=self.site.platform, part=self.site.part, limit=limit)
+            notices = NoticeDao.fetch_by_status(
+                status=1, platform=self.site.platform, part=self.site.part, limit=limit
+            )
             if not notices:
                 logger.info(f"{job_name} 没有待获取 HTML 的记录")
                 return {"updated": 0}
@@ -193,16 +212,24 @@ class CCGPCrawler:
     @staticmethod
     def save_cleaned_html(html: str) -> str:
         soup = BeautifulSoup(html, "lxml")
-        main = soup.find('div', class_='vF_deail_maincontent')
-        # 去掉js/css代码
-        for tag in main.find_all(['script', 'style']):
+        main = soup.find("div", class_="div-article2")
+        if not main:
+            main = soup.find("div", class_="newsCon")
+        if not main:
+            main = soup.find("div", class_="div-content")
+        if not main:
+            # 兜底：取 body
+            main = soup.find("body")
+
+        # 去掉 js/css 代码
+        for tag in main.find_all(["script", "style"]):
             tag.decompose()
         # 去掉评论
         for comment in main.find_all(string=lambda text: isinstance(text, Comment)):
             comment.extract()
-        # 去掉标签属性
+        # 去掉标签属性（保留 href）
         for tag in main.find_all():
-            tag.attrs = {k: v for k, v in tag.attrs.items() if k == 'href'}
+            tag.attrs = {k: v for k, v in tag.attrs.items() if k == "href"}
         content = str(main)
         content = content.replace("<span>", "").replace("</span>", "")
         return util.save_html(content)
@@ -221,8 +248,8 @@ class CCGPCrawler:
 
     def _build_list_url(self, page: int) -> str:
         if page <= 1:
-            return urljoin(self.site.url, "index.htm")
-        return urljoin(self.site.url, f"index_{page}.htm")
+            return urljoin(self.site.url, "index.html")
+        return urljoin(self.site.url, f"index_{page}.html")
 
     def _parse_list_page(self, list_url: str) -> list[NoticeDto]:
         """解析列表页，返回招标公告 DTO 列表."""
@@ -232,33 +259,48 @@ class CCGPCrawler:
 
         notices = []
         soup = BeautifulSoup(html, "lxml")
-        ul = soup.find("ul", class_="c_list_bid")
-        if not ul:
-            logger.warning(f"[解析] 未找到列表容器: {list_url}")
-            return notices
+        for a in soup.find_all("a", class_="divtitlejy"):
+            href = a.get("href", "").strip()
+            title = a.get("title", "").strip()
+            if not href or not title:
+                continue
 
-        for li in ul.find_all("li"):
-            a = li.find("a", href=True)
-            if a is not None:
-                dto = NoticeDto(
-                    platform=self.site.platform,
-                    part=self.site.part,
-                    title=a["title"].strip(),
-                    url=urljoin(list_url, a["href"]),
-                )
-                if em_type := li.find("em", attrs={"rel": "bxlx"}):
-                    dto.notice_type = em_type.get_text(strip=True)
-                notices.append(dto)
+            dto = NoticeDto(
+                platform=self.site.platform,
+                part=self.site.part,
+                title=title,
+                url=urljoin(list_url, href),
+            )
+
+            # 尝试从内部 <p> 标签提取区域和项目编号，如：【昌平区】[S110000A001042382003]
+            if p_tag := a.find("p"):
+                p_text = p_tag.get_text(strip=True)
+                if "【" in p_text and "】" in p_text:
+                    district = p_text[p_text.find("【") + 1 : p_text.find("】")]
+                    dto.region_district = district
+
+            # 公告类型：从标题中推断
+            dto.notice_type = self._extract_notice_type(title)
+            notices.append(dto)
         return notices
+
+    @staticmethod
+    def _extract_notice_type(title: str) -> str:
+        """从标题中提取公告类型."""
+        if "资格预审" in title:
+            return "资格预审公告"
+        if "招标" in title:
+            return "招标公告"
+        return ""
 
     @staticmethod
     def _is_tender_notice(dto: NoticeDto) -> bool:
         if not dto.notice_type:
             return False
         nt = dto.notice_type.strip()
-        if "招标" not in nt:
+        if "招标" not in nt and "资格预审" not in nt:
             return False
         exclude_keywords = ("中标", "成交", "结果", "更正", "废标", "终止")
-        if any(kw in nt for kw in exclude_keywords):
+        if any(kw in dto.title for kw in exclude_keywords):
             return False
         return True

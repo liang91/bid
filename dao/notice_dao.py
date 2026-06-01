@@ -33,6 +33,16 @@ class NoticeDao:
 
         return True
 
+    @staticmethod
+    def get_latest(platform: str, part: str) -> NoticeDto | None:
+        with db() as session:
+            stmt = select(Notice).where(Notice.platform == platform, Notice.part == part).order_by(
+                Notice.id.desc()).limit(1)
+            row = session.execute(stmt).scalar()
+            if row:
+                return NoticeDto.model_validate(row)
+            return None
+
     # -----------------------------------------------------------------------
     @staticmethod
     def fetch_candidates(
@@ -60,12 +70,12 @@ class NoticeDao:
     # 按状态查询
     # -----------------------------------------------------------------------
     @staticmethod
-    def fetch_by_status(status: int, platform: str, limit: int = 100) -> List[NoticeDto]:
+    def fetch_by_status(status: int, platform: str, part: str, limit: int = 100) -> List[NoticeDto]:
         """按爬取状态查询公告记录."""
         with db() as session:
             result = session.execute(
                 select(Notice)
-                .where(Notice.status == status, Notice.platform == platform)
+                .where(Notice.status == status, Notice.platform == platform, Notice.part == part)
                 .order_by(Notice.id.asc())
                 .limit(limit)
             )
@@ -85,7 +95,7 @@ class NoticeDao:
     def update_html(notice_id: int, html: str) -> bool:
         """保存html文件路径，并将状态推进到 20."""
         with db.begin() as session:
-            stmt = update(Notice).where(Notice.id == notice_id).values(html=html, status= 20)
+            stmt = update(Notice).where(Notice.id == notice_id).values(html=html, status=20)
             res = session.execute(stmt)
             return res.rowcount == 1
 

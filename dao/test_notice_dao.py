@@ -15,10 +15,15 @@ class TestNoticeDao:
 
     def test_create(self):
         res = NoticeDao.create([
-            NoticeDto(project_name='测试项目1', url='url1'),
+            NoticeDto(project_name='测试项目3', url='url3'),
             NoticeDto(project_name='测试项目2', url='url2'),
+            NoticeDto(project_name='测试项目1', url='url1'),
         ])
         print(res)
+
+    def test_get_latest(self):
+        dto = NoticeDao.get_latest("中国政府采购网", "地方公告")
+        print(dto)
 
     def test_fetch_unparsed(self):
         res = NoticeDao.fetch_unparsed()

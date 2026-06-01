@@ -4,6 +4,7 @@ from sqlalchemy import select
 
 from models import JobLog, JobLogDto
 from dao import db
+from sqlalchemy import update
 
 
 class JobLogDao:
@@ -18,17 +19,11 @@ class JobLogDao:
             return log.id
 
     @staticmethod
-    def update(dto: JobLogDto) -> bool:
-        if not dto.id:
-            return False
+    def update(id: int, **kwargs) -> bool:
         with db.begin() as session:
-            obj = session.get(JobLog, dto.id)
-            if not obj:
-                return False
-            obj.status = dto.status
-            obj.record_count = dto.record_count
-            obj.message = dto.message
-            return True
+            stmt = update(JobLog).where(JobLog.id == id).values(**kwargs)
+            res = session.execute(stmt)
+            return res.rowcount == 1
 
     @staticmethod
     def fetch_recent(job_name: str, limit: int = 10) -> list[JobLogDto]:
