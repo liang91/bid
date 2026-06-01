@@ -252,3 +252,21 @@ CREATE TABLE match_results (
     INDEX idx_supplier_id (supplier_id),
     INDEX idx_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='供应商-招标公告匹配结果表';
+
+
+-- ------------------------------------------------------------
+-- 任务执行日志表 job_logs
+-- ------------------------------------------------------------
+CREATE TABLE job_logs (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+    job_name VARCHAR(64) NOT NULL DEFAULT '' COMMENT '任务名称，如：crawl_list、parse、match、ai_match',
+    trigger_time DATETIME NOT NULL DEFAULT '1970-01-01 00:00:00' COMMENT '计划触发时间',
+    status TINYINT NOT NULL DEFAULT 0 COMMENT '状态：0=运行中 1=成功 2=失败',
+    record_count BIGINT NOT NULL DEFAULT 0 COMMENT '本次任务处理记录数',
+    message TEXT COMMENT '日志消息或异常堆栈',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+
+    INDEX idx_job_name (job_name),
+    INDEX idx_status (status),
+    INDEX idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='定时任务执行日志表';
