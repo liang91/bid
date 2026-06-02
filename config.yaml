@@ -41,3 +41,15 @@ embedding:
   base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
   api_key: "sk-153a38633e1e47c8a599204da072d127"
   model: "text-embedding-v4"
+
+# 企业微信客户联系配置
+wechat_work:
+  corp_id: "wwxxxxxxxxxxxxxxxx"
+  corp_secret: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# 推送配置
+push:
+  # 公告详情落地页基础 URL，推送卡片点击后跳转
+  detail_base_url: "https://your-domain.com"
+  # 是否启用推送（调试时可关闭）
+  enabled: true

@@ -1,3 +1,5 @@
+from datetime import date, datetime
+
 from dao import db
 from models import MatchDto, Match
 from sqlalchemy import delete, select, update
@@ -44,6 +46,43 @@ class MatchDao:
             stmt = update(Match).where(Match.id == dto.id).values(
                 dto.model_dump(exclude={"id", "created_at"})
             )
+            res = session.execute(stmt)
+            return res.rowcount == 1
+
+    @staticmethod
+    def get_unpushed_top_matches(day: date, limit: int = 100) -> list[Match]:
+        """获取当天未推送的高匹配记录（status=30 且 is_top3=1 且未推送）."""
+        with db() as session:
+            stmt = (
+                select(Match)
+                .where(Match.day == day)
+                .where(Match.status == 30)
+                .where(Match.is_top3 == 1)
+                .where((Match.push_status.is_(None)) | (Match.push_status == 0))
+                .order_by(Match.final_score.desc())
+                .limit(limit)
+            )
+            return list(session.scalars(stmt).all())
+
+    @staticmethod
+    def update_push_status(
+        match_id: int,
+        status: int,
+        channel: str = "",
+        message_id: str = "",
+    ) -> bool:
+        """更新匹配记录的推送状态."""
+        with db.begin() as session:
+            values = {
+                "push_status": status,
+                "push_time": datetime.now(),
+            }
+            if channel:
+                values["push_channel"] = channel
+            if message_id:
+                values["push_message_id"] = message_id
+
+            stmt = update(Match).where(Match.id == match_id).values(**values)
             res = session.execute(stmt)
             return res.rowcount == 1
 

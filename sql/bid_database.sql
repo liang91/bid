@@ -315,3 +315,34 @@ VALUES
 ('北京市公共资源交易服务平台', '工程建设招标公告', 'fetch_html', 'BJGGZYCrawler', 'https://ggzyfw.beijing.gov.cn/jyxxggjtbyqs/', 1, 'interval', '{"minutes": 60}', 3, 1, 0, '招标公告', 10),
 ('北京市公共资源交易服务平台', '政府采购招标公告', 'fetch_list', 'BJGGZYCrawler', 'https://ggzyfw.beijing.gov.cn/jyxxcggg/', 1, 'interval', '{"minutes": 60}', 3, 1, 0, '招标公告', 10),
 ('北京市公共资源交易服务平台', '政府采购招标公告', 'fetch_html', 'BJGGZYCrawler', 'https://ggzyfw.beijing.gov.cn/jyxxcggg/', 1, 'interval', '{"minutes": 60}', 3, 1, 0, '招标公告', 10);
+
+
+-- ------------------------------------------------------------
+-- 人员表: 供应商下的具体人员（企微推送目标）
+-- ------------------------------------------------------------
+CREATE TABLE users (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+    supplier_id BIGINT NOT NULL DEFAULT 0 COMMENT '所属供应商ID',
+
+    -- 基础信息
+    name VARCHAR(64) NOT NULL DEFAULT '' COMMENT '姓名',
+    phone VARCHAR(20) NOT NULL DEFAULT '' COMMENT '手机号',
+    email VARCHAR(128) NOT NULL DEFAULT '' COMMENT '邮箱',
+
+    -- 企业微信绑定（客户联系）
+    wechat_external_userid VARCHAR(64) NOT NULL DEFAULT '' COMMENT '个人微信在企业微信中的外部联系人ID',
+    wechat_follow_user_id VARCHAR(64) NOT NULL DEFAULT '' COMMENT '跟进该人员的我方员工企微UserID',
+    wechat_bind_time DATETIME DEFAULT NULL COMMENT '企微绑定时间',
+    wechat_bind_state VARCHAR(128) NOT NULL DEFAULT '' COMMENT '绑定时的二维码state参数',
+
+    -- 状态
+    is_primary TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否主要联系人: 1=是 0=否',
+    status TINYINT(1) NOT NULL DEFAULT 1 COMMENT '状态: 1=正常 0=禁用',
+
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+
+    INDEX idx_supplier_id (supplier_id),
+    INDEX idx_wechat_external_userid (wechat_external_userid),
+    INDEX idx_wechat_follow_user_id (wechat_follow_user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='供应商人员表';

@@ -6,6 +6,7 @@ import time
 from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from loguru import logger
 
@@ -14,6 +15,7 @@ from models import JobLogDto
 from services.crawler_service import CrawlerService
 from services.notice_service import NoticeService
 from services.supplier_service import SupplierService
+from services.push_service import PushService
 
 
 class ScheduleService:
@@ -51,7 +53,7 @@ class ScheduleService:
     # -----------------------------------------------------------------------
     @classmethod
     def register_jobs(cls):
-        """从 sites 表读取启用的配置并注册爬取任务."""
+        """从 sites 表读取启用的配置并注册所有定时任务."""
         sites = SiteDao.enabled()
         for site in sites:
             job_name = site.job_name()
@@ -65,45 +67,45 @@ class ScheduleService:
             )
             logger.info(f"{job_name}：已注册任务")
 
-        # # 08:30 爬取详情 HTML（全局，不区分平台）
-        # self.scheduler.add_job(
-        #     func=self._wrap,
-        #     args=("crawl_html", self.job_crawl_html),
-        #     trigger=CronTrigger(hour=8, minute=30),
-        #     id="crawl_html",
-        #     name="爬取公告详情HTML",
-        #     replace_existing=True,
-        # )
-        #
-        # # 09:00 解析 HTML
-        # self.scheduler.add_job(
-        #     func=self._wrap,
-        #     args=("parse", self.job_parse),
-        #     trigger=CronTrigger(hour=9, minute=0),
-        #     id="parse",
-        #     name="LLM解析公告",
-        #     replace_existing=True,
-        # )
-        #
-        # # 09:30 全量匹配（粗筛 + 语义排序）
-        # self.scheduler.add_job(
-        #     func=self._wrap,
-        #     args=("match", self.job_match),
-        #     trigger=CronTrigger(hour=9, minute=30),
-        #     id="match",
-        #     name="供应商公告匹配",
-        #     replace_existing=True,
-        # )
-        #
-        # # 10:00 AI 精筛
-        # self.scheduler.add_job(
-        #     func=self._wrap,
-        #     args=("ai_match", self.job_ai_match),
-        #     trigger=CronTrigger(hour=10, minute=0),
-        #     id="ai_match",
-        #     name="AI精筛",
-        #     replace_existing=True,
-        # )
+        # 解析 HTML
+        cls.scheduler.add_job(
+            func=cls._wrap,
+            args=("parse", cls.job_parse),
+            trigger=CronTrigger(hour=9, minute=0),
+            id="parse",
+            replace_existing=True,
+        )
+        logger.info("parse：已注册任务（每天 09:00）")
+
+        # 全量匹配（粗筛 + 语义排序）
+        cls.scheduler.add_job(
+            func=cls._wrap,
+            args=("match", cls.job_match),
+            trigger=CronTrigger(hour=9, minute=30),
+            id="match",
+            replace_existing=True,
+        )
+        logger.info("match：已注册任务（每天 09:30）")
+
+        # AI 精筛
+        cls.scheduler.add_job(
+            func=cls._wrap,
+            args=("ai_match", cls.job_ai_match),
+            trigger=CronTrigger(hour=10, minute=0),
+            id="ai_match",
+            replace_existing=True,
+        )
+        logger.info("ai_match：已注册任务（每天 10:00）")
+
+        # 推送高匹配结果给供应商人员（企微1v1）
+        cls.scheduler.add_job(
+            func=cls._wrap,
+            args=("push", cls.job_push),
+            trigger=CronTrigger(hour=10, minute=30),
+            id="push",
+            replace_existing=True,
+        )
+        logger.info("push：已注册任务（每天 10:30）")
 
     @classmethod
     def reload_jobs(cls):
@@ -151,3 +153,8 @@ class ScheduleService:
     def job_ai_match(cls, limit: int = 100):
         """批量 AI 精筛."""
         return SupplierService.ai_match_all(limit=limit)
+
+    @classmethod
+    def job_push(cls):
+        """推送高匹配公告给供应商人员（企业微信1v1）."""
+        return PushService.push_daily_top_matches()

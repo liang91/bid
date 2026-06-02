@@ -37,7 +37,7 @@ class Match(Base):
     final_rank: Mapped[int] = mapped_column(BigInteger, default=0, comment="最终排名")
     is_top3: Mapped[int] = mapped_column(TINYINT, default=0, comment="是否前三")
 
-    push_status: Mapped[int] = mapped_column(TINYINT, default=0, comment="推送状态")
+    push_status: Mapped[int] = mapped_column(TINYINT, default=0, comment="推送状态: 0=未推送 10=已创建素材待员工确认 1=已送达 2=失败")
     push_time: Mapped[datetime] = mapped_column(DateTime, default=_DEFAULT_DATETIME, comment="推送时间")
     push_channel: Mapped[str] = mapped_column(String(32), default="", comment="推送渠道")
     push_message_id: Mapped[str] = mapped_column(String(128), default="", comment="推送消息ID")

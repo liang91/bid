@@ -17,3 +17,4 @@ from models.supplier_service_region import SupplierServiceRegion, SupplierServic
 from models.match import MatchNoticeScore, Match, MatchDto
 from models.job_log import JobLog, JobLogDto
 from models.site import Site, SiteDto
+from models.user import User, UserDto
