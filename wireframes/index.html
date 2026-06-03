@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>公装招标推荐 - 首页</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            height: 100%;
+            overflow: hidden;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #000;
+            display: flex;
+            justify-content: center;
+        }
+        .phone {
+            width: 375px;
+            height: 100vh;
+            max-height: 812px;
+            background: #000;
+            overflow: hidden;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 状态栏 */
+        .status-bar {
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #fff;
+            z-index: 100;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.4), transparent);
+            pointer-events: none;
+        }
+
+        /* 全屏滑动容器 */
+        .feed-container {
+            flex: 1;
+            overflow-y: scroll;
+            scroll-snap-type: y mandatory;
+            scrollbar-width: none;
+            padding-bottom: 68px;
+        }
+        .feed-container::-webkit-scrollbar { display: none; }
+
+        /* 单条全屏卡片 — 严格一屏 */
+        .feed-item {
+            width: 100%;
+            height: 100%;
+            min-height: 100%;
+            scroll-snap-align: start;
+            scroll-snap-stop: always;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feed-item:nth-child(1) .feed-bg { background: linear-gradient(180deg, #16213e 0%, #1a1a2e 40%, #0f0f23 100%); }
+        .feed-item:nth-child(2) .feed-bg { background: linear-gradient(180deg, #1a1a2e 0%, #16213e 40%, #0a0a1a 100%); }
+        .feed-item:nth-child(3) .feed-bg { background: linear-gradient(180deg, #0f3460 0%, #1a1a2e 40%, #0f0f23 100%); }
+        .feed-item:nth-child(4) .feed-bg { background: linear-gradient(180deg, #1a1a2e 0%, #16213e 40%, #0a0a1a 100%); }
+
+        .feed-bg {
+            position: absolute;
+            inset: 0;
+        }
+
+        /* 内容区域 — 固定在一屏内，不滚动 */
+        .feed-content {
+            position: absolute;
+            top: 44px;
+            bottom: 56px;
+            left: 16px;
+            right: 16px;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 匹配度 */
+        .match-score {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 10px;
+            background: rgba(255,107,107,0.15);
+            border: 1px solid rgba(255,107,107,0.25);
+            border-radius: 12px;
+            font-size: 12px;
+            color: #ff6b6b;
+            font-weight: 600;
+            margin-bottom: 6px;
+            flex-shrink: 0;
+        }
+        .match-score.high {
+            background: rgba(255,171,0,0.15);
+            border-color: rgba(255,171,0,0.25);
+            color: #ffab00;
+        }
+        .match-score.medium {
+            background: rgba(100,181,246,0.15);
+            border-color: rgba(100,181,246,0.25);
+            color: #64b5f6;
+        }
+
+        /* 标题 */
+        .feed-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #fff;
+            line-height: 1.35;
+            margin-bottom: 8px;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            flex-shrink: 0;
+        }
+
+        /* 标签行 */
+        .feed-tags {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+            flex-shrink: 0;
+        }
+        .feed-tag {
+            padding: 3px 8px;
+            background: rgba(255,171,0,0.15);
+            color: #ffab00;
+            font-size: 11px;
+            border-radius: 4px;
+            border: 1px solid rgba(255,171,0,0.25);
+        }
+        .feed-tag.qualify {
+            background: rgba(129,199,132,0.12);
+            color: #81c784;
+            border-color: rgba(129,199,132,0.2);
+        }
+        .feed-tag.urgent {
+            background: rgba(255,107,107,0.15);
+            color: #ff6b6b;
+            border-color: rgba(255,107,107,0.25);
+        }
+
+        /* 金额行 */
+        .feed-amount-row {
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+            margin-bottom: 10px;
+            flex-shrink: 0;
+        }
+        .feed-amount-label {
+            font-size: 12px;
+            color: rgba(255,255,255,0.5);
+        }
+        .feed-amount {
+            font-size: 26px;
+            font-weight: 800;
+            color: #ffab00;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+
+        /* 信息网格 */
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            margin-bottom: 8px;
+            flex-shrink: 0;
+        }
+        .info-cell {
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            padding: 7px 10px;
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+        .info-cell-label {
+            font-size: 10px;
+            color: rgba(255,255,255,0.4);
+            margin-bottom: 2px;
+        }
+        .info-cell-value {
+            font-size: 13px;
+            color: #fff;
+            font-weight: 500;
+        }
+        .info-cell-value.alert {
+            color: #ff6b6b;
+            font-weight: 600;
+        }
+
+        /* 时间线 */
+        .timeline {
+            margin-bottom: 8px;
+            flex-shrink: 0;
+        }
+        .timeline-title {
+            font-size: 11px;
+            color: rgba(255,255,255,0.4);
+            margin-bottom: 5px;
+        }
+        .timeline-items {
+            display: flex;
+            gap: 6px;
+        }
+        .timeline-item {
+            flex: 1;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            padding: 7px 4px;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+        .timeline-date {
+            font-size: 12px;
+            color: #fff;
+            font-weight: 600;
+            margin-bottom: 1px;
+        }
+        .timeline-label {
+            font-size: 10px;
+            color: rgba(255,255,255,0.4);
+        }
+
+        /* 资质要求 */
+        .qualify-section {
+            margin-bottom: 8px;
+            flex-shrink: 0;
+        }
+        .qualify-title {
+            font-size: 11px;
+            color: rgba(255,255,255,0.4);
+            margin-bottom: 5px;
+        }
+        .qualify-list {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .qualify-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+            font-size: 12px;
+            color: rgba(255,255,255,0.7);
+            line-height: 1.4;
+            background: rgba(255,255,255,0.04);
+            padding: 5px 8px;
+            border-radius: 6px;
+        }
+        .qualify-dot {
+            width: 4px; height: 4px;
+            background: #81c784;
+            border-radius: 50%;
+            margin-top: 5px;
+            flex-shrink: 0;
+        }
+
+        /* 项目简介 */
+        .desc-section {
+            margin-bottom: 8px;
+            flex-shrink: 0;
+        }
+        .desc-title {
+            font-size: 11px;
+            color: rgba(255,255,255,0.4);
+            margin-bottom: 4px;
+        }
+        .desc-text {
+            font-size: 12px;
+            color: rgba(255,255,255,0.6);
+            line-height: 1.6;
+        }
+
+        /* 分隔线 + 招标方 */
+        .feed-divider {
+            height: 1px;
+            background: rgba(255,255,255,0.1);
+            margin: 6px 0;
+            flex-shrink: 0;
+        }
+        .feed-company {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+        .company-avatar {
+            width: 32px; height: 32px;
+            background: rgba(255,255,255,0.12);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 13px;
+            color: #fff;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+        .company-name {
+            font-size: 13px;
+            color: #fff;
+            font-weight: 500;
+        }
+        .company-sub {
+            font-size: 10px;
+            color: rgba(255,255,255,0.45);
+            margin-top: 1px;
+        }
+
+        /* 底部操作栏 — 横向排列 */
+        .feed-actions {
+            position: absolute;
+            bottom: 8px;
+            left: 16px;
+            right: 16px;
+            height: 44px;
+            display: flex;
+            gap: 10px;
+            z-index: 10;
+        }
+        .action-btn {
+            flex: 1;
+            height: 44px;
+            border-radius: 22px;
+            border: none;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+        }
+        .action-btn-outline {
+            background: rgba(255,255,255,0.08);
+            color: rgba(255,255,255,0.7);
+            border: 1px solid rgba(255,255,255,0.12);
+        }
+        .action-btn-outline:active {
+            background: rgba(255,255,255,0.15);
+        }
+        .action-btn-primary {
+            background: #ffab00;
+            color: #1a1a2e;
+        }
+        .action-btn-primary:active {
+            opacity: 0.9;
+        }
+        .action-btn-heart {
+            background: rgba(255,107,107,0.15);
+            color: #ff6b6b;
+            border: 1px solid rgba(255,107,107,0.2);
+        }
+        .action-btn-heart:active {
+            background: rgba(255,107,107,0.25);
+        }
+
+        /* Tab 栏 */
+        .tab-bar {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            height: 68px;
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(20px);
+            display: flex;
+            justify-content: space-around;
+            align-items: flex-start;
+            padding-top: 6px;
+            z-index: 100;
+            border-top: 1px solid rgba(255,255,255,0.06);
+        }
+        .tab-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            font-size: 11px;
+            color: rgba(255,255,255,0.4);
+            cursor: pointer;
+            padding: 4px 20px;
+        }
+        .tab-item.active { color: #fff; }
+        .tab-icon { font-size: 22px; }
+
+        /* 空白提示 */
+        .empty-hint {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: rgba(255,255,255,0.3);
+        }
+        .empty-hint-icon { font-size: 48px; margin-bottom: 12px; }
+        .empty-hint-text { font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="phone">
+        <div class="status-bar">
+            <span>9:41</span>
+            <span>📶 5G 🔋</span>
+        </div>
+
+        <div class="feed-container">
+            <!-- 第1条 -->
+            <div class="feed-item">
+                <div class="feed-bg"></div>
+                <div class="feed-content">
+                    <div class="match-score high">🔥 匹配度 95%</div>
+                    <div class="feed-title">某科技互联网公司总部办公楼装修项目</div>
+                    <div class="feed-tags">
+                        <span class="feed-tag">办公空间</span>
+                        <span class="feed-tag">室内装修</span>
+                        <span class="feed-tag qualify">二级资质</span>
+                        <span class="feed-tag urgent">⚠️ 3天后截标</span>
+                    </div>
+                    <div class="feed-amount-row">
+                        <span class="feed-amount-label">预估金额</span>
+                        <span class="feed-amount">¥380万</span>
+                    </div>
+
+                    <div class="info-grid">
+                        <div class="info-cell">
+                            <div class="info-cell-label">📍 项目地点</div>
+                            <div class="info-cell-value">朝阳区望京</div>
+                        </div>
+                        <div class="info-cell">
+                            <div class="info-cell-label">📐 装修面积</div>
+                            <div class="info-cell-value">4,200㎡</div>
+                        </div>
+                        <div class="info-cell">
+                            <div class="info-cell-label">🔧 工期要求</div>
+                            <div class="info-cell-value">90日历天</div>
+                        </div>
+                        <div class="info-cell">
+                            <div class="info-cell-label">💰 保证金</div>
+                            <div class="info-cell-value alert">¥10万</div>
+                        </div>
+                    </div>
+
+                    <div class="timeline">
+                        <div class="timeline-title">📅 关键时间节点</div>
+                        <div class="timeline-items">
+                            <div class="timeline-item">
+                                <div class="timeline-date">06-10</div>
+                                <div class="timeline-label">报名截止</div>
+                            </div>
+                            <div class="timeline-item">
+                                <div class="timeline-date alert">06-15</div>
+                                <div class="timeline-label">截标日期</div>
+                            </div>
+                            <div class="timeline-item">
+                                <div class="timeline-date">06-20</div>
+                                <div class="timeline-label">开标日期</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="qualify-section">
+                        <div class="qualify-title">🛡️ 资质要求</div>
+                        <div class="qualify-list">
+                            <div class="qualify-item">
+                                <span class="qualify-dot"></span>
+                                <span>建筑装修装饰工程专业承包二级及以上</span>
+                            </div>
+                            <div class="qualify-item">
+                                <span class="qualify-dot"></span>
+                                <span>具备有效的安全生产许可证</span>
+                            </div>
+                            <div class="qualify-item">
+                                <span class="qualify-dot"></span>
+                                <span>项目经理须具备二级建造师资格</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="desc-section">
+                        <div class="desc-title">📝 项目简介</div>
+                        <div class="desc-text">
+                            位于望京SOHO附近的新总部办公楼，包含办公区、会议室、员工餐厅、健身区等功能分区。要求现代简约风格，含强弱电改造、空调消防改造等配套工程。
+                        </div>
+                    </div>
+
+                    <div class="feed-divider"></div>
+                    <div class="feed-company">
+                        <div class="company-avatar">科</div>
+                        <div>
+                            <div class="company-name">北京某科技有限公司</div>
+                            <div class="company-sub">互联网 · 500-1000人 · 成立8年</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="feed-actions">
+                    <button class="action-btn action-btn-outline">⛔ 不感兴趣</button>
+                    <button class="action-btn action-btn-primary" onclick="location.href='detail.html'">📄 详情</button>
+                    <button class="action-btn action-btn-heart">🤍 收藏</button>
+                </div>
+            </div>
+
+            <!-- 第2条 -->
+            <div class="feed-item">
+                <div class="feed-bg"></div>
+                <div class="feed-content">
+                    <div class="match-score high">🔥 匹配度 88%</div>
+                    <div class="feed-title">连锁餐饮品牌旗舰店装修工程（含厨房改造）</div>
+                    <div class="feed-tags">
+                        <span class="feed-tag">餐饮空间</span>
+                        <span class="feed-tag">门店装修</span>
+                        <span class="feed-tag qualify">消防资质</span>
+                    </div>
+                    <div class="feed-amount-row">
+                        <span class="feed-amount-label">预估金额</span>
+                        <span class="feed-amount">¥85万</span>
+                    </div>
+
+                    <div class="info-grid">
+                        <div class="info-cell">
+                            <div class="info-cell-label">📍 项目地点</div>
+                            <div class="info-cell-value">海淀区中关村</div>
+                        </div>
+                        <div class="info-cell">
+                            <div class="info-cell-label">📐 装修面积</div>
+                            <div class="info-cell-value">380㎡</div>
+                        </div>
+                        <div class="info-cell">
+                            <div class="info-cell-label">🔧 工期要求</div>
+                            <div class="info-cell-value">45日历天</div>
+                        </div>
+                        <div class="info-cell">
+                            <div class="info-cell-label">💰 保证金</div>
+                            <div class="info-cell-value">¥2万</div>
+                        </div>
+                    </div>
+
+                    <div class="timeline">
+                        <div class="timeline-title">📅 关键时间节点</div>
+                        <div class="timeline-items">
+                            <div class="timeline-item">
+                                <div class="timeline-date">06-18</div>
+                                <div class="timeline-label">报名截止</div>
+                            </div>
+                            <div class="timeline-item">
+                                <div class="timeline-date">06-24</div>
+                                <div class="timeline-label">截标日期</div>
+                            </div>
+                            <div class="timeline-item">
+                                <div class="timeline-date">06-28</div>
+                                <div class="timeline-label">开标日期</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="qualify-section">
+                        <div class="qualify-title">🛡️ 资质要求</div>
+                        <div class="qualify-list">
+                            <div class="qualify-item">
+                                <span class="qualify-dot"></span>
+                                <span>建筑装修装饰工程专业承包三级及以上</span>
+                            </div>
+                            <div class="qualify-item">
+                                <span class="qualify-dot"></span>
+                                <span>具备消防设施工程专业承包资质</span>
+                            </div>
+                            <div class="qualify-item">
+                                <span class="qualify-dot"></span>
+                                <span>近2年有餐饮门店装修业绩</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="desc-section">
+                        <div class="desc-title">📝 项目简介</div>
+                        <div class="desc-text">
+                            知名连锁餐饮品牌北京旗舰店，含前厅用餐区、后厨操作间、员工休息区。要求符合食品安全规范，厨房需做防水、排烟、隔油池等专项工程。
+                        </div>
+                    </div>
+
+                    <div class="feed-divider"></div>
+                    <div class="feed-company">
+                        <div class="company-avatar">餐</div>
+                        <div>
+                            <div class="company-name">某连锁餐饮管理有限公司</div>
+                            <div class="company-sub">餐饮连锁 · 全国200+门店</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="feed-actions">
+                    <button class="action-btn action-btn-outline">⛔ 不感兴趣</button>
+                    <button class="action-btn action-btn-primary" onclick="location.href='detail.html'">📄 详情</button>
+                    <button class="action-btn action-btn-heart">🤍 收藏</button>
+                </div>
+            </div>
+
+            <!-- 第3条 -->
+            <div class="feed-item">
+                <div class="feed-bg"></div>
+                <div class="feed-content">
+                    <div class="match-score medium">💡 匹配度 72%</div>
+                    <div class="feed-title">某三甲医院门诊楼改造工程</div>
+                    <div class="feed-tags">
+                        <span class="feed-tag">医院</span>
+                        <span class="feed-tag">改造工程</span>
+                        <span class="feed-tag qualify">一级资质</span>
+                    </div>
+                    <div class="feed-amount-row">
+                        <span class="feed-amount-label">预估金额</span>
+                        <span class="feed-amount">¥1,200万</span>
+                    </div>
+
+                    <div class="info-grid">
+                        <div class="info-cell">
+                            <div class="info-cell-label">📍 项目地点</div>
+                            <div class="info-cell-value">大兴区兴华大街</div>
+                        </div>
+                        <div class="info-cell">
+                            <div class="info-cell-label">📐 装修面积</div>
+                            <div class="info-cell-value">8,500㎡</div>
+                        </div>
+                        <div class="info-cell">
+                            <div class="info-cell-label">🔧 工期要求</div>
+                            <div class="info-cell-value">180日历天</div>
+                        </div>
+                        <div class="info-cell">
+                            <div class="info-cell-label">💰 保证金</div>
+                            <div class="info-cell-value alert">¥30万</div>
+                        </div>
+                    </div>
+
+                    <div class="timeline">
+                        <div class="timeline-title">📅 关键时间节点</div>
+                        <div class="timeline-items">
+                            <div class="timeline-item">
+                                <div class="timeline-date">06-25</div>
+                                <div class="timeline-label">报名截止</div>
+                            </div>
+                            <div class="timeline-item">
+                                <div class="timeline-date">07-05</div>
+                                <div class="timeline-label">截标日期</div>
+                            </div>
+                            <div class="timeline-item">
+                                <div class="timeline-date">07-12</div>
+                                <div class="timeline-label">开标日期</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="qualify-section">
+                        <div class="qualify-title">🛡️ 资质要求</div>
+                        <div class="qualify-list">
+                            <div class="qualify-item">
+                                <span class="qualify-dot"></span>
+                                <span>建筑装修装饰工程专业承包一级资质</span>
+                            </div>
+                            <div class="qualify-item">
+                                <span class="qualify-dot"></span>
+                                <span>具备机电安装、消防、智能化等配套资质</span>
+                            </div>
+                            <div class="qualify-item">
+                                <span class="qualify-dot"></span>
+                                <span>近5年完成过医院类装修工程业绩</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="desc-section">
+                        <div class="desc-title">📝 项目简介</div>
+                        <div class="desc-text">
+                            门诊楼1-4层整体改造，包括候诊区、诊室、检验科、药房等。要求施工期间门诊正常运营，需分区分时段施工，对噪音和粉尘控制要求严格。
+                        </div>
+                    </div>
+
+                    <div class="feed-divider"></div>
+                    <div class="feed-company">
+                        <div class="company-avatar">医</div>
+                        <div>
+                            <div class="company-name">北京市大兴区某医院</div>
+                            <div class="company-sub">公立三甲 · 事业单位</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="feed-actions">
+                    <button class="action-btn action-btn-outline">⛔ 不感兴趣</button>
+                    <button class="action-btn action-btn-primary" onclick="location.href='detail.html'">📄 详情</button>
+                    <button class="action-btn action-btn-heart">🤍 收藏</button>
+                </div>
+            </div>
+
+            <!-- 第4条 -->
+            <div class="feed-item">
+                <div class="feed-bg"></div>
+                <div class="feed-content">
+                    <div class="match-score high">🔥 匹配度 91%</div>
+                    <div class="feed-title">连锁酒店大堂及客房翻新项目</div>
+                    <div class="feed-tags">
+                        <span class="feed-tag">酒店</span>
+                        <span class="feed-tag">翻新</span>
+                        <span class="feed-tag qualify">无特殊资质</span>
+                        <span class="feed-tag urgent">⚠️ 5天后截标</span>
+                    </div>
+                    <div class="feed-amount-row">
+                        <span class="feed-amount-label">预估金额</span>
+                        <span class="feed-amount">¥260万</span>
+                    </div>
+
+                    <div class="info-grid">
+                        <div class="info-cell">
+                            <div class="info-cell-label">📍 项目地点</div>
+                            <div class="info-cell-value">通州区新华大街</div>
+                        </div>
+                        <div class="info-cell">
+                            <div class="info-cell-label">📐 装修面积</div>
+                            <div class="info-cell-value">3,200㎡</div>
+                        </div>
+                        <div class="info-cell">
+                            <div class="info-cell-label">🔧 工期要求</div>
+                            <div class="info-cell-value">60日历天</div>
+                        </div>
+                        <div class="info-cell">
+                            <div class="info-cell-label">💰 保证金</div>
+                            <div class="info-cell-value">¥5万</div>
+                        </div>
+                    </div>
+
+                    <div class="timeline">
+                        <div class="timeline-title">📅 关键时间节点</div>
+                        <div class="timeline-items">
+                            <div class="timeline-item">
+                                <div class="timeline-date">06-12</div>
+                                <div class="timeline-label">报名截止</div>
+                            </div>
+                            <div class="timeline-item">
+                                <div class="timeline-date alert">06-17</div>
+                                <div class="timeline-label">截标日期</div>
+                            </div>
+                            <div class="timeline-item">
+                                <div class="timeline-date">06-22</div>
+                                <div class="timeline-label">开标日期</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="qualify-section">
+                        <div class="qualify-title">🛡️ 资质要求</div>
+                        <div class="qualify-list">
+                            <div class="qualify-item">
+                                <span class="qualify-dot"></span>
+                                <span>建筑装修装饰工程专业承包三级及以上</span>
+                            </div>
+                            <div class="qualify-item">
+                                <span class="qualify-dot"></span>
+                                <span>具备有效的安全生产许可证</span>
+                            </div>
+                            <div class="qualify-item">
+                                <span class="qualify-dot"></span>
+                                <span>接受夜间施工，不影响白天营业</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="desc-section">
+                        <div class="desc-title">📝 项目简介</div>
+                        <div class="desc-text">
+                            酒店一层大堂及2-5层共80间客房全面翻新，包括墙面、地面、卫浴、灯具、软装更换。要求按品牌统一标准施工，需分楼层逐层施工保证运营。
+                        </div>
+                    </div>
+
+                    <div class="feed-divider"></div>
+                    <div class="feed-company">
+                        <div class="company-avatar">酒</div>
+                        <div>
+                            <div class="company-name">某酒店集团北京分公司</div>
+                            <div class="company-sub">连锁酒店 · 全国运营</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="feed-actions">
+                    <button class="action-btn action-btn-outline">⛔ 不感兴趣</button>
+                    <button class="action-btn action-btn-primary" onclick="location.href='detail.html'">📄 详情</button>
+                    <button class="action-btn action-btn-heart">🤍 收藏</button>
+                </div>
+            </div>
+
+            <!-- 到底提示 -->
+            <div class="feed-item">
+                <div class="feed-bg" style="background: #0a0a1a;"></div>
+                <div class="empty-hint">
+                    <div class="empty-hint-icon">📭</div>
+                    <div class="empty-hint-text">今日已看完所有匹配项目</div>
+                    <div style="font-size: 12px; margin-top: 8px; color: rgba(255,255,255,0.3);">明天上午9点为你推送新项目</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 栏 -->
+        <div class="tab-bar">
+            <div class="tab-item active">
+                <span class="tab-icon">🏠</span>
+                <span>首页</span>
+            </div>
+            <div class="tab-item" onclick="location.href='favorites.html'">
+                <span class="tab-icon">⭐</span>
+                <span>关注</span>
+            </div>
+            <div class="tab-item" onclick="location.href='profile.html'">
+                <span class="tab-icon">👤</span>
+                <span>我的</span>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -346,3 +346,28 @@ CREATE TABLE users (
     INDEX idx_wechat_external_userid (wechat_external_userid),
     INDEX idx_wechat_follow_user_id (wechat_follow_user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='供应商人员表';
+
+-- ------------------------------------------------------------
+-- 用户-公告互动表 user_notice_interactions（支撑小程序 Feed 收藏/不感兴趣）
+-- ------------------------------------------------------------
+CREATE TABLE user_notice_interactions (
+    id              BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_id         BIGINT NOT NULL DEFAULT 0 COMMENT '用户ID（users.id）',
+    notice_id       BIGINT NOT NULL DEFAULT 0 COMMENT '公告ID（notices.id）',
+
+    is_viewed           TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否已浏览: 1=是 0=否',
+    is_favorite         TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否收藏: 1=是 0=否',
+    is_not_interested   TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否标记不感兴趣: 1=是 0=否',
+    is_applied          TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否已投标: 1=是 0=否',
+
+    viewed_at       DATETIME DEFAULT NULL COMMENT '浏览时间',
+    favorited_at    DATETIME DEFAULT NULL COMMENT '收藏时间',
+
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+
+    UNIQUE KEY uk_user_notice (user_id, notice_id),
+    INDEX idx_user_favorite (user_id, is_favorite),
+    INDEX idx_user_not_interested (user_id, is_not_interested),
+    INDEX idx_notice_interactions (notice_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户与公告的互动记录';

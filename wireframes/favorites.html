@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的关注</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a1a;
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+        }
+        .phone {
+            width: 375px;
+            height: 812px;
+            background: #0a0a1a;
+            border-radius: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+        .status-bar {
+            height: 44px;
+            background: #0a0a1a;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #fff;
+        }
+        .header {
+            padding: 12px 20px 8px;
+            background: #0a0a1a;
+        }
+        .header-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: #fff;
+        }
+        .header-sub {
+            font-size: 13px;
+            color: rgba(255,255,255,0.4);
+            margin-top: 4px;
+        }
+        .content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px 16px;
+            scrollbar-width: none;
+        }
+        .content::-webkit-scrollbar { display: none; }
+        
+        .fav-card {
+            background: linear-gradient(135deg, rgba(26,26,46,0.9) 0%, rgba(22,33,62,0.9) 100%);
+            border-radius: 16px;
+            padding: 18px;
+            margin-bottom: 12px;
+            border: 1px solid rgba(255,255,255,0.06);
+            cursor: pointer;
+        }
+        .fav-card:active { transform: scale(0.98); }
+        .fav-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 10px;
+        }
+        .fav-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #fff;
+            line-height: 1.4;
+            flex: 1;
+            padding-right: 12px;
+        }
+        .fav-amount {
+            font-size: 18px;
+            font-weight: 700;
+            color: #ffab00;
+            white-space: nowrap;
+        }
+        .fav-meta {
+            display: flex;
+            gap: 14px;
+            margin-bottom: 10px;
+        }
+        .fav-meta-item {
+            font-size: 12px;
+            color: rgba(255,255,255,0.45);
+        }
+        .fav-tags {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 14px;
+        }
+        .fav-tag {
+            padding: 3px 10px;
+            background: rgba(255,171,0,0.12);
+            color: #ffab00;
+            font-size: 11px;
+            border-radius: 4px;
+        }
+        .fav-tag.urgent {
+            background: rgba(255,107,107,0.15);
+            color: #ff6b6b;
+        }
+        .fav-tag.qualify {
+            background: rgba(129,199,132,0.12);
+            color: #81c784;
+        }
+        .fav-actions {
+            display: flex;
+            gap: 8px;
+        }
+        .fav-btn {
+            flex: 1;
+            height: 38px;
+            border-radius: 19px;
+            border: none;
+            font-size: 13px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            font-weight: 500;
+        }
+        .fav-btn-outline {
+            background: rgba(255,255,255,0.08);
+            color: rgba(255,255,255,0.5);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .fav-btn-primary {
+            background: #ffab00;
+            color: #1a1a2e;
+        }
+        
+        /* 空状态 */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding-top: 140px;
+            color: rgba(255,255,255,0.2);
+        }
+        .empty-icon { font-size: 56px; margin-bottom: 16px; }
+        .empty-text { font-size: 14px; }
+        .empty-sub { font-size: 12px; margin-top: 8px; }
+        
+        .tab-bar {
+            height: 70px;
+            background: rgba(10,10,26,0.95);
+            backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(255,255,255,0.06);
+            display: flex;
+            justify-content: space-around;
+            align-items: flex-start;
+            padding-top: 6px;
+        }
+        .tab-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+            font-size: 11px;
+            color: rgba(255,255,255,0.4);
+            cursor: pointer;
+            padding: 4px 20px;
+        }
+        .tab-item.active { color: #fff; }
+        .tab-icon { font-size: 22px; }
+    </style>
+</head>
+<body>
+    <div class="phone">
+        <div class="status-bar">
+            <span>9:41</span>
+            <span>📶 5G 🔋</span>
+        </div>
+        
+        <div class="header">
+            <div class="header-title">我的关注</div>
+            <div class="header-sub">共 3 条关注的招标信息</div>
+        </div>
+        
+        <div class="content">
+            <!-- 关注卡片1 -->
+            <div class="fav-card" onclick="location.href='detail.html'">
+                <div class="fav-top">
+                    <div class="fav-title">某科技互联网公司总部办公楼装修项目</div>
+                    <div class="fav-amount">¥380万</div>
+                </div>
+                <div class="fav-meta">
+                    <span class="fav-meta-item">📍 北京 · 朝阳区</span>
+                    <span class="fav-meta-item">⏰ 截标 06-15</span>
+                    <span class="fav-meta-item">📐 4,200㎡</span>
+                </div>
+                <div class="fav-tags">
+                    <span class="fav-tag">办公空间</span>
+                    <span class="fav-tag qualify">二级资质</span>
+                    <span class="fav-tag urgent">⚠️ 仅剩3天</span>
+                </div>
+                <div class="fav-actions">
+                    <button class="fav-btn fav-btn-outline">取消关注</button>
+                    <button class="fav-btn fav-btn-primary">查看详情</button>
+                </div>
+            </div>
+            
+            <!-- 关注卡片2 -->
+            <div class="fav-card" onclick="location.href='detail.html'">
+                <div class="fav-top">
+                    <div class="fav-title">连锁餐饮品牌旗舰店装修工程（含厨房）</div>
+                    <div class="fav-amount">¥85万</div>
+                </div>
+                <div class="fav-meta">
+                    <span class="fav-meta-item">📍 北京 · 海淀区</span>
+                    <span class="fav-meta-item">⏰ 截标 06-24</span>
+                    <span class="fav-meta-item">📐 380㎡</span>
+                </div>
+                <div class="fav-tags">
+                    <span class="fav-tag">餐饮空间</span>
+                    <span class="fav-tag qualify">消防资质</span>
+                </div>
+                <div class="fav-actions">
+                    <button class="fav-btn fav-btn-outline">取消关注</button>
+                    <button class="fav-btn fav-btn-primary">查看详情</button>
+                </div>
+            </div>
+            
+            <!-- 关注卡片3 -->
+            <div class="fav-card" onclick="location.href='detail.html'">
+                <div class="fav-top">
+                    <div class="fav-title">某三甲医院门诊楼改造工程</div>
+                    <div class="fav-amount">¥1,200万</div>
+                </div>
+                <div class="fav-meta">
+                    <span class="fav-meta-item">📍 北京 · 大兴区</span>
+                    <span class="fav-meta-item">⏰ 截标 07-05</span>
+                    <span class="fav-meta-item">📐 8,500㎡</span>
+                </div>
+                <div class="fav-tags">
+                    <span class="fav-tag">医院</span>
+                    <span class="fav-tag qualify">一级资质</span>
+                </div>
+                <div class="fav-actions">
+                    <button class="fav-btn fav-btn-outline">取消关注</button>
+                    <button class="fav-btn fav-btn-primary">查看详情</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="tab-bar">
+            <div class="tab-item" onclick="location.href='index.html'">
+                <span class="tab-icon">🏠</span>
+                <span>首页</span>
+            </div>
+            <div class="tab-item active">
+                <span class="tab-icon">⭐</span>
+                <span>关注</span>
+            </div>
+            <div class="tab-item" onclick="location.href='profile.html'">
+                <span class="tab-icon">👤</span>
+                <span>我的</span>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

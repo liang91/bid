@@ -43,6 +43,18 @@ class SupplierDao:
             return result
 
     @staticmethod
+    def update(dto: SupplierDto) -> bool:
+        """全量更新供应商画像."""
+        if not dto.id:
+            return False
+        with db.begin() as session:
+            stmt = update(Supplier).where(Supplier.id == dto.id).values(
+                dto.model_dump(exclude={"id", "created_at"})
+            )
+            res = session.execute(stmt)
+            return res.rowcount == 1
+
+    @staticmethod
     def update_embedding(supplier_id: int, embedding: bytes) -> bool:
         """更新供应商的 Embedding 向量."""
         with db.begin() as session:

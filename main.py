@@ -1,126 +1,79 @@
-#!/usr/bin/env python3
-"""项目主入口脚本.
+"""FastAPI 应用入口.
 
-支持功能：
-1. 爬虫：分步骤爬取政府采购网公告
-2. 补算：为存量数据计算 Embedding 向量
-3. 匹配：运行匹配引擎（粗筛 + 语义排序）
-4. 调度器：启动后台定时任务
+启动方式（开发，单进程）:
+    python main.py
 
-用法示例:
-    # CLI 模式（指定 target-id 从数据库读取配置）
-    python main.py --step list --target-id 1
-    python main.py --step list --target-id 1 --size 3
-
-    # CLI 模式（兼容旧方式，直接指定 part）
-    python main.py --step list --part dfgg --size 2
-    python main.py --step html --part dfgg --size 50
-
-    # 调度器模式
-    python main.py --schedule
+启动方式（生产，多进程，推荐）:
+    gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000
 """
-import argparse
-import signal
-import sys
-import time
 
-from loguru import logger
-from services import CrawlerService, NoticeService, SupplierService, ScheduleService
-from dao import SiteDao
+import uvicorn
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
+from api.schemas import Res
+from api.feed_controller import FeedController
+from api.notice_controller import NoticeController
+from api.user_controller import UserController
+from api.supplier_controller import SupplierController
+from api.dict_controller import DictController
 
-# ---------------------------------------------------------------------------
-# CLI 模式
-# ---------------------------------------------------------------------------
-def run_cli(args):
-    if args.step in ("fetch-list", "fetch-html"):
-        site = SiteDao.get(args.site)
-        if not site:
-            logger.error(f"[CLI] target_id={args.site} 不存在")
-            sys.exit(1)
-        CrawlerService.run(site)
-    elif args.step == "match":
-        SupplierService.filtered_notices(args.supplier)
-    elif args.step == "parse":
-        NoticeService.parse_htmls(args.size)
-        logger.info("parse htmls done")
+app = FastAPI(
+    title="公装招标推荐 API",
+    description="公装招标信息推荐小程序后端接口",
+    version="1.0.0",
+)
 
+# CORS（开发阶段允许所有来源，生产环境需收紧）
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# ---------------------------------------------------------------------------
-# 调度器模式
-# ---------------------------------------------------------------------------
-def run_scheduler():
-    ScheduleService.start()
-
-    def shutdown_handler(signum, frame):
-        logger.info("[Scheduler] 收到退出信号，正在关闭...")
-        ScheduleService.shutdown()
-        sys.exit(0)
-
-    signal.signal(signal.SIGINT, shutdown_handler)
-    signal.signal(signal.SIGTERM, shutdown_handler)
-
-    logger.info("[Scheduler] 调度器运行中，按 Ctrl+C 停止")
-    while True:
-        time.sleep(60)
-
-
-# ---------------------------------------------------------------------------
-# 入口
-# ---------------------------------------------------------------------------
-def main():
-    parser = argparse.ArgumentParser(
-        description="招标信息服务平台主入口",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-用法示例:
-  # CLI 模式（指定 site-id）
-  python main.py --step fetch-list --site 1
-  python main.py --step fetch-html --site 1
-
-  # CLI 模式（兼容旧方式）
-  python main.py --step match --supplier 37
-
-  # 调度器模式
-  python main.py --schedule
-        """,
+# ─────────────────────────────────────────
+# 全局异常处理：统一返回 {code, msg, data} 结构
+# ─────────────────────────────────────────
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """捕获所有未处理异常，返回统一格式."""
+    return JSONResponse(
+        status_code=500,
+        content=Res(code=500, msg=str(exc), data=None).model_dump(),
     )
 
-    parser.add_argument(
-        "--schedule", action="store_true",
-        help="启动定时调度器（后台运行）",
-    )
 
-    parser.add_argument(
-        "--step", type=str,
-        choices=["fetch-list", "fetch-html"],
-        help="执行步骤（CLI 模式必填）",
-    )
+# ─────────────────────────────────────────
+# 实例化 Controller 并注册路由，统一前缀 /api
+# ─────────────────────────────────────────
+app.include_router(FeedController().router, prefix="/api")
+app.include_router(NoticeController().router, prefix="/api")
+app.include_router(UserController().router, prefix="/api")
+app.include_router(SupplierController().router, prefix="/api")
+app.include_router(DictController().router, prefix="/api")
 
-    parser.add_argument(
-        "--site", type=int, default=0,
-        help="爬虫目标配置 ID（从 sites 表读取）",
-    )
 
-    parser.add_argument(
-        "--top-k", type=int, default=200,
-        help="语义排序后保留的 Top K 条 (默认: 200，仅 match 有效)",
-    )
+@app.post("/")
+def root():
+    return Res(data={"message": "公装招标推荐 API", "docs": "/docs"})
 
-    parser.add_argument(
-        "--supplier", type=int, default=0,
-        help="供应商 ID（仅 match 有效）",
-    )
 
-    args = parser.parse_args()
-
-    if args.schedule:
-        run_scheduler()
-    else:
-        if not args.step:
-            parser.error("--step is required when not in scheduler mode")
-        run_cli(args)
+@app.post("/health")
+def health():
+    return Res(data={"status": "ok"})
 
 
 if __name__ == "__main__":
-    main()
+    # workers: 进程数，建议等于 CPU 核心数
+    # 多进程模式下第一个参数必须用字符串 "main:app"，不能传 app 对象
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8000,
+        workers=4,
+        limit_concurrency=100,
+    )
+    print("Hello World!")

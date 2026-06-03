@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>偏好设置</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f6fa;
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+        }
+        .phone {
+            width: 375px;
+            height: 812px;
+            background: #fff;
+            border-radius: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+        .status-bar {
+            height: 44px;
+            background: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .nav-bar {
+            height: 48px;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            background: #fff;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .nav-back {
+            font-size: 20px;
+            cursor: pointer;
+            padding: 8px;
+            margin-left: -8px;
+        }
+        .nav-title {
+            flex: 1;
+            text-align: center;
+            font-size: 16px;
+            font-weight: 600;
+            margin-right: 32px;
+        }
+        .content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            scrollbar-width: none;
+        }
+        .content::-webkit-scrollbar { display: none; }
+        
+        .pref-section {
+            background: #fff;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+        }
+        .pref-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #1a1a2e;
+            margin-bottom: 6px;
+        }
+        .pref-sub {
+            font-size: 12px;
+            color: #999;
+            margin-bottom: 16px;
+        }
+        .pref-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .pref-option {
+            padding: 10px 18px;
+            border-radius: 20px;
+            font-size: 14px;
+            border: 1.5px solid #eee;
+            background: #fff;
+            color: #555;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .pref-option.selected {
+            background: #1a1a2e;
+            color: #fff;
+            border-color: #1a1a2e;
+        }
+        .pref-option:active { transform: scale(0.95); }
+        
+        /* 金额滑块区 */
+        .amount-display {
+            text-align: center;
+            padding: 16px 0;
+        }
+        .amount-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #e17055;
+        }
+        .amount-range {
+            display: flex;
+            justify-content: space-between;
+            padding: 0 8px;
+            margin-top: 8px;
+        }
+        .amount-range span {
+            font-size: 12px;
+            color: #999;
+        }
+        .slider-bar {
+            height: 6px;
+            background: #eee;
+            border-radius: 3px;
+            margin: 12px 8px;
+            position: relative;
+        }
+        .slider-fill {
+            position: absolute;
+            left: 0;
+            width: 60%;
+            height: 100%;
+            background: #1a1a2e;
+            border-radius: 3px;
+        }
+        .slider-thumb {
+            position: absolute;
+            left: 60%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px; height: 20px;
+            background: #fff;
+            border: 3px solid #1a1a2e;
+            border-radius: 50%;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+        }
+        
+        /* 地区选择 */
+        .city-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+        .city-item {
+            padding: 12px;
+            text-align: center;
+            border-radius: 12px;
+            border: 1.5px solid #eee;
+            font-size: 14px;
+            color: #555;
+            cursor: pointer;
+        }
+        .city-item.selected {
+            background: #1a1a2e;
+            color: #fff;
+            border-color: #1a1a2e;
+        }
+        .city-item.add {
+            border-style: dashed;
+            color: #999;
+        }
+        
+        .bottom-bar {
+            padding: 12px 16px 28px;
+            background: #fff;
+            border-top: 1px solid #f0f0f0;
+        }
+        .save-btn {
+            width: 100%;
+            height: 48px;
+            background: #1a1a2e;
+            color: #fff;
+            border: none;
+            border-radius: 24px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+        .save-btn:active { opacity: 0.9; }
+    </style>
+</head>
+<body>
+    <div class="phone">
+        <div class="status-bar">
+            <span>9:41</span>
+            <span>📶 5G 🔋</span>
+        </div>
+        
+        <div class="nav-bar">
+            <span class="nav-back" onclick="history.back()">←</span>
+            <span class="nav-title">我的偏好</span>
+        </div>
+        
+        <div class="content">
+            <!-- 业务类型 -->
+            <div class="pref-section">
+                <div class="pref-title">🏢 我擅长的业务类型</div>
+                <div class="pref-sub">选择你最常接的项目类型，最多选3个</div>
+                <div class="pref-options">
+                    <div class="pref-option selected">办公室</div>
+                    <div class="pref-option selected">餐饮</div>
+                    <div class="pref-option">酒店</div>
+                    <div class="pref-option">商业空间</div>
+                    <div class="pref-option">医院</div>
+                    <div class="pref-option">学校</div>
+                    <div class="pref-option">厂房</div>
+                    <div class="pref-option">展厅</div>
+                    <div class="pref-option">健身房</div>
+                </div>
+            </div>
+            
+            <!-- 金额范围 -->
+            <div class="pref-section">
+                <div class="pref-title">💰 项目金额范围</div>
+                <div class="pref-sub">设置你能承接的项目金额区间</div>
+                <div class="amount-display">
+                    <div class="amount-value">50万 - 500万</div>
+                </div>
+                <div class="slider-bar">
+                    <div class="slider-fill"></div>
+                    <div class="slider-thumb"></div>
+                </div>
+                <div class="amount-range">
+                    <span>0</span>
+                    <span>100万</span>
+                    <span>500万</span>
+                    <span>1000万+</span>
+                </div>
+            </div>
+            
+            <!-- 项目地区 -->
+            <div class="pref-section">
+                <div class="pref-title">📍 关注地区</div>
+                <div class="pref-sub">选择你常驻和愿意接项目的地区</div>
+                <div class="city-grid">
+                    <div class="city-item selected">北京</div>
+                    <div class="city-item selected">天津</div>
+                    <div class="city-item">河北</div>
+                    <div class="city-item add">+ 添加</div>
+                </div>
+            </div>
+            
+            <!-- 其他偏好 -->
+            <div class="pref-section">
+                <div class="pref-title">⚡ 其他偏好</div>
+                <div class="pref-sub" style="margin-bottom: 12px;">推荐设置</div>
+                <div class="pref-options">
+                    <div class="pref-option">只看紧急项目</div>
+                    <div class="pref-option selected">免保证金优先</div>
+                    <div class="pref-option">近7天发布</div>
+                    <div class="pref-option">距离优先</div>
+                </div>
+            </div>
+            
+            <div style="height: 20px;"></div>
+        </div>
+        
+        <div class="bottom-bar">
+            <button class="save-btn">保存设置</button>
+        </div>
+    </div>
+</body>
+</html>

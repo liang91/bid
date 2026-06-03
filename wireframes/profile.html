@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>偏好设置</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a1a;
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+        }
+        .phone {
+            width: 375px;
+            height: 812px;
+            background: #0a0a1a;
+            border-radius: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+        .status-bar {
+            height: 44px;
+            background: #0a0a1a;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #fff;
+        }
+        .header {
+            padding: 8px 20px 16px;
+            background: #0a0a1a;
+        }
+        .header-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: #fff;
+        }
+        .header-sub {
+            font-size: 13px;
+            color: rgba(255,255,255,0.4);
+            margin-top: 4px;
+        }
+        .content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0 16px 16px;
+            scrollbar-width: none;
+        }
+        .content::-webkit-scrollbar { display: none; }
+
+        /* 设置卡片 */
+        .setting-card {
+            background: linear-gradient(135deg, rgba(26,26,46,0.9) 0%, rgba(22,33,62,0.9) 100%);
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 12px;
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+        .setting-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 4px;
+        }
+        .setting-desc {
+            font-size: 12px;
+            color: rgba(255,255,255,0.35);
+            margin-bottom: 12px;
+        }
+
+        /* 单选/多选标签 */
+        .chip-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .chip {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            border: 1.5px solid rgba(255,255,255,0.1);
+            background: transparent;
+            color: rgba(255,255,255,0.55);
+            cursor: pointer;
+            user-select: none;
+        }
+        .chip.selected {
+            background: #ffab00;
+            border-color: #ffab00;
+            color: #1a1a2e;
+            font-weight: 500;
+        }
+
+        /* 开关行 */
+        .switch-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .switch-row:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+        .switch-label {
+            font-size: 14px;
+            color: rgba(255,255,255,0.8);
+        }
+        .switch {
+            width: 48px;
+            height: 26px;
+            border-radius: 13px;
+            background: rgba(255,255,255,0.12);
+            position: relative;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .switch.on {
+            background: #ffab00;
+        }
+        .switch-knob {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: #fff;
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            transition: left 0.2s;
+        }
+        .switch.on .switch-knob {
+            left: 24px;
+        }
+
+        /* 地区网格 */
+        .city-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+        .city-chip {
+            padding: 10px;
+            text-align: center;
+            border-radius: 10px;
+            font-size: 14px;
+            border: 1.5px solid rgba(255,255,255,0.1);
+            background: transparent;
+            color: rgba(255,255,255,0.55);
+            cursor: pointer;
+            user-select: none;
+        }
+        .city-chip.selected {
+            background: #ffab00;
+            border-color: #ffab00;
+            color: #1a1a2e;
+            font-weight: 500;
+        }
+
+        /* 金额滑块 */
+        .amount-display {
+            text-align: center;
+            padding: 8px 0 4px;
+        }
+        .amount-value {
+            font-size: 22px;
+            font-weight: 700;
+            color: #ffab00;
+        }
+        .amount-range {
+            display: flex;
+            justify-content: space-between;
+            padding: 0 4px;
+            margin-top: 6px;
+        }
+        .amount-range span {
+            font-size: 11px;
+            color: rgba(255,255,255,0.35);
+        }
+        .slider-track {
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+            margin: 10px 4px 6px;
+            position: relative;
+        }
+        .slider-fill {
+            position: absolute;
+            left: 0;
+            width: 50%;
+            height: 100%;
+            background: #ffab00;
+            border-radius: 2px;
+        }
+        .slider-thumb {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 18px;
+            height: 18px;
+            background: #fff;
+            border: 2px solid #ffab00;
+            border-radius: 50%;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+
+        /* 底部保存 */
+        .save-bar {
+            padding: 12px 16px 28px;
+            background: #0a0a1a;
+        }
+        .save-btn {
+            width: 100%;
+            height: 48px;
+            background: #ffab00;
+            color: #1a1a2e;
+            border: none;
+            border-radius: 24px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .save-btn:active {
+            opacity: 0.9;
+        }
+
+        .tab-bar {
+            height: 70px;
+            background: rgba(10,10,26,0.95);
+            backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(255,255,255,0.06);
+            display: flex;
+            justify-content: space-around;
+            align-items: flex-start;
+            padding-top: 6px;
+        }
+        .tab-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+            font-size: 11px;
+            color: rgba(255,255,255,0.4);
+            cursor: pointer;
+            padding: 4px 20px;
+        }
+        .tab-item.active { color: #fff; }
+        .tab-icon { font-size: 22px; }
+    </style>
+</head>
+<body>
+    <div class="phone">
+        <div class="status-bar">
+            <span>9:41</span>
+            <span>📶 5G 🔋</span>
+        </div>
+
+        <div class="header">
+            <div class="header-title">偏好设置</div>
+            <div class="header-sub">完善信息后，推荐更精准</div>
+        </div>
+
+        <div class="content">
+            <!-- 资质合并 -->
+            <div class="setting-card">
+                <div class="setting-title">🛡️ 你能调用的资质有哪些？</div>
+                <div class="setting-desc">含自有和挂靠平台提供的，多选</div>
+                <div class="chip-group">
+                    <div class="chip selected">装修工程一级</div>
+                    <div class="chip selected">装修工程二级</div>
+                    <div class="chip selected">安全生产许可证</div>
+                    <div class="chip">消防设施工程</div>
+                    <div class="chip">机电安装工程</div>
+                    <div class="chip">电子与智能化</div>
+                    <div class="chip selected">建造师</div>
+                    <div class="chip">建筑幕墙</div>
+                    <div class="chip">钢结构</div>
+                </div>
+            </div>
+
+            <!-- 擅长业务类型 -->
+            <div class="setting-card">
+                <div class="setting-title">🔨 擅长业务类型</div>
+                <div class="setting-desc">多选，你常接的项目类型</div>
+                <div class="chip-group">
+                    <div class="chip selected">办公室</div>
+                    <div class="chip selected">餐饮</div>
+                    <div class="chip">酒店</div>
+                    <div class="chip">商业空间</div>
+                    <div class="chip">医院</div>
+                    <div class="chip">学校</div>
+                    <div class="chip">厂房</div>
+                    <div class="chip">展厅</div>
+                </div>
+            </div>
+
+            <!-- 项目金额范围 -->
+            <div class="setting-card">
+                <div class="setting-title">💰 项目金额范围</div>
+                <div class="setting-desc">你能承接的项目金额区间</div>
+                <div class="amount-display">
+                    <div class="amount-value">50万 - 500万</div>
+                </div>
+                <div class="slider-track">
+                    <div class="slider-fill"></div>
+                    <div class="slider-thumb"></div>
+                </div>
+                <div class="amount-range">
+                    <span>不限</span>
+                    <span>100万</span>
+                    <span>500万</span>
+                    <span>1000万+</span>
+                </div>
+            </div>
+
+            <!-- 关注地区 -->
+            <div class="setting-card">
+                <div class="setting-title">📍 关注地区</div>
+                <div class="setting-desc">多选，你常驻和愿意接项目的地区</div>
+                <div class="city-grid">
+                    <div class="city-chip selected">北京</div>
+                    <div class="city-chip selected">天津</div>
+                    <div class="city-chip">河北</div>
+                    <div class="city-chip">山东</div>
+                    <div class="city-chip">山西</div>
+                    <div class="city-chip">内蒙古</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="save-bar">
+            <button class="save-btn">保存设置</button>
+        </div>
+
+        <div class="tab-bar">
+            <div class="tab-item" onclick="location.href='index.html'">
+                <span class="tab-icon">🏠</span>
+                <span>首页</span>
+            </div>
+            <div class="tab-item" onclick="location.href='favorites.html'">
+                <span class="tab-icon">⭐</span>
+                <span>关注</span>
+            </div>
+            <div class="tab-item active">
+                <span class="tab-icon">⚙️</span>
+                <span>设置</span>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

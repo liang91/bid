@@ -50,6 +50,20 @@ class MatchDao:
             return res.rowcount == 1
 
     @staticmethod
+    def fetch_latest_by_supplier(supplier_id: int, day: date | None = None, limit: int = 1) -> list[MatchDto]:
+        """获取供应商最近的匹配记录."""
+        from sqlalchemy import desc
+        with db() as session:
+            stmt = (
+                select(Match)
+                .where(Match.supplier_id == supplier_id)
+                .order_by(desc(Match.day), desc(Match.id))
+                .limit(limit)
+            )
+            rows = session.execute(stmt).scalars().all()
+            return [MatchDto.model_validate(row) for row in rows]
+
+    @staticmethod
     def get_unpushed_top_matches(day: date, limit: int = 100) -> list[Match]:
         """获取当天未推送的高匹配记录（status=30 且 is_top3=1 且未推送）."""
         with db() as session:

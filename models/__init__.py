@@ -18,3 +18,4 @@ from models.match import MatchNoticeScore, Match, MatchDto
 from models.job_log import JobLog, JobLogDto
 from models.site import Site, SiteDto
 from models.user import User, UserDto
+from models.user_notice_interaction import UserNoticeInteraction, UserNoticeInteractionDto

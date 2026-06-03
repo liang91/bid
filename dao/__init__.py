@@ -56,3 +56,4 @@ from dao.match_dao import MatchDao
 from dao.job_log_dao import JobLogDao
 from dao.site_dao import SiteDao
 from dao.user_dao import UserDao
+from dao.user_notice_interaction_dao import UserNoticeInteractionDao
