@@ -19,3 +19,4 @@ from models.job_log import JobLog, JobLogDto
 from models.site import Site, SiteDto
 from models.user import User, UserDto
 from models.user_notice_interaction import UserNoticeInteraction, UserNoticeInteractionDto
+from models.latest_url import LatestUrl, LatestUrlDto

@@ -11,6 +11,7 @@ import requests
 from bs4 import BeautifulSoup, Comment
 
 import util
+from crawlers.crawler import Crawler
 from dao import NoticeDao
 from models import NoticeDto, SiteDto
 
@@ -76,7 +77,7 @@ EXCLUDED_NOTICE_TYPES = {
 }
 
 
-class PLAPCrawler:
+class PLAPCrawler(Crawler):
     """军队采购网爬虫.
 
     仅抓取北京地区、项目类别为工程的公告信息。

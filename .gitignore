@@ -5,3 +5,4 @@ __pycache__
 *.pyo
 html
 log.txt
+log.*.txt

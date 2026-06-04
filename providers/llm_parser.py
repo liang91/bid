@@ -52,7 +52,7 @@ class LLMParser:
             return {}
 
     @classmethod
-    def extract_json(cls, content: str) -> dict:
+    def extract_json(cls, content: str) -> dict | list:
         """从 LLM 回复中提取 JSON 对象."""
         content = content.strip()
         if content.startswith("```"):
