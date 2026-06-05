@@ -1,4 +1,5 @@
 """中国政府采购网爬虫实现."""
+import re
 from urllib.parse import urljoin
 
 from loguru import logger
@@ -49,7 +50,6 @@ class CCGPCrawler(Crawler):
         if not ul:
             logger.warning(f"[解析] 未找到列表容器: {list_url}")
             return notices
-
         for li in ul.find_all("li"):
             a = li.find("a", href=True)
             if a is not None:
@@ -61,6 +61,8 @@ class CCGPCrawler(Crawler):
                 )
                 if em_type := li.find("em", attrs={"rel": "bxlx"}):
                     dto.notice_type = em_type.get_text(strip=True)
+                if region_match := re.search(r'地域：<em>([^<]+)</em>', str(li)):
+                    dto.region_province = region_match.group(1).strip()
                 notices.append(dto)
         return notices
 

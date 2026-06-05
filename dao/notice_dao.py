@@ -26,6 +26,8 @@ class NoticeDao:
     @staticmethod
     def create(notices: list[NoticeDto]) -> bool:
         """批量保存公告，自动去重（基于 URL）并更新已存在记录"""
+        if not notices:
+            return True
         datas = [notice.model_dump(exclude={"id", "created_at", "updated_at"}) for notice in notices]
         with db.begin() as session:
             stmt = insert(Notice).values(datas)

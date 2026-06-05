@@ -59,7 +59,7 @@ class BJGGZYCrawler(Crawler):
 
     def parse_list_page(self, list_url: str) -> list[NoticeDto]:
         """解析列表页，返回招标公告 DTO 列表."""
-        html = self._get(list_url)
+        html = self.get(list_url)
         if html is None:
             return []
 

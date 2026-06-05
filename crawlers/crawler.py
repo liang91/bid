@@ -106,7 +106,8 @@ class Crawler:
         for page in range(1, pages + 1):
             url = self.build_list_url(page)
             page_notices = self.parse_list_page(url)
-
+            urls = [notice.url for notice in notices]
+            page_notices = [notice for notice in page_notices if notice.url not in urls]
             notices.extend(page_notices)
             reach_latest = False
             if latest:
@@ -127,35 +128,41 @@ class Crawler:
             latest.url = notices[-1].url
 
         notices = self.filter_notice(notices)
-        NoticeDao.create(notices)
+        if notices:
+            NoticeDao.create(notices)
         LatestUrlDao.save(latest)
         return {"created": len(notices)}
 
     # 对从公告页抓取的公告列表，过滤并保留工程类的项目
     @staticmethod
     def filter_notice(notices: list[NoticeDto]) -> list[NoticeDto]:
-        rows: list[str] = []
-        for idx, notice in enumerate(notices):
-            rows.append(f"公告id：{idx} 公告标题：{notice.title} 地区：{notice.region_province}")
-        content = "\n".join(rows)
-        prompt = """你是一个招标公告信息解析助手，我给你一批公告的基础信息，你的任务是把公告解析成如下JSON对象并返回：
-            [
-                {
-                    "id": 公告id
-                    "title": 公告标题
-                    "notice_type": 公告类型 （枚举值，只能是后面这几种：公开招标、询价招标、资格预审、竞争性谈判、竞争性磋商、邀请招标、其他）
-                    "region": 公告发布地区是否属于京津冀（0:不属于 1:属于）
-                    "project": 是否是工程类型的公告（0:不是 1:是）  
-                }
-            ]
-            注意：只返回JSON数据
-            公告基本信息如下：
-            """
+        if not notices:
+            return []
+
         result: list[NoticeDto] = []
-        conditions = LLMParser.parse(prompt + content)
-        for condition, notice in zip(conditions, notices):
-            if condition['region'] == 1 and condition['project'] == 1 and condition['notice_type'] != '其他':
-                result.append(notice)
+        batches = [notices[i:i+50] for i in range(0, len(notices), 50)]
+        for batch in batches:
+            rows: list[str] = []
+            for idx, notice in enumerate(batch):
+                rows.append(f"公告id：{idx} 公告标题：{notice.title} 地区：{notice.region_province}")
+            content = "\n".join(rows)
+            prompt = """你是一个招标公告信息解析助手，我给你一批公告的基础信息，你的任务是把公告解析成如下JSON对象并返回：
+                [
+                    {
+                        "id": 公告id（整形）
+                        "title": 公告标题
+                        "notice_type": 公告类型 （枚举值，只能是后面这几种：公开招标、询价招标、资格预审、竞争性谈判、竞争性磋商、邀请招标、其他）
+                        "region": 公告发布地区是否属于京津冀（0:不属于 1:属于）
+                        "project": 是否是工程类型的公告（0:不是 1:是）  
+                    }
+                ]
+                注意：只返回JSON数据
+                公告基本信息如下：
+                """
+            conditions = LLMParser.parse(prompt + content)
+            for condition in conditions:
+                if condition['region'] == 1 and condition['project'] == 1 and '其他' not in condition['notice_type']:
+                    result.append(batch[condition['id']])
         return result
 
     # ========================================================================
