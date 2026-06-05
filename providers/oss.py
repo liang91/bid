@@ -25,8 +25,8 @@ class OSS:
     # OSS 客户端（类加载时自动初始化）
     _cfg = oss.config.load_default()
     _cfg.credentials_provider = oss.credentials.StaticCredentialsProvider(
-        access_key_id="",
-        access_key_secret="",
+        access_key_id="LTAI5tQ6Djja9qQDRTRyFVPL",
+        access_key_secret="kJAhzSy6bNzMa7JXP8jmS7FjiDV9cW",
     )
     _cfg.region = "cn-hangzhou"
     _cfg.endpoint = 'oss-cn-hangzhou.aliyuncs.com'
