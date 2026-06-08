@@ -31,7 +31,7 @@ class CrawlerService:
                 cls = getattr(module, crawler_path)
             return cls(site)
         except Exception as e:
-            logger.error(f"{job_name}加载爬虫类失败{crawler_path}: {e}")
+            logger.error(f"{job_name}加载爬虫类失败: {e}")
             return None
 
     @staticmethod

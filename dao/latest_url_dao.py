@@ -7,6 +7,8 @@ class LatestUrlDao:
 
     @staticmethod
     def save(dto: LatestUrlDto):
+        if not dto:
+            return
         if not dto.id:
             LatestUrlDao.create(dto)
         else:

@@ -2,7 +2,7 @@
 
 from decimal import Decimal
 from typing import Optional
-from models import Base
+from models import Base, DefaultDto
 
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import BigInteger, DECIMAL, ForeignKey, String
@@ -22,7 +22,7 @@ class NoticePackage(Base):
     unit: Mapped[str] = mapped_column(String(32), default="", comment="单位")
 
 
-class NoticePackageDto(BaseModel):
+class NoticePackageDto(DefaultDto):
     """公告分包数据类."""
     model_config = ConfigDict(from_attributes=True)
 

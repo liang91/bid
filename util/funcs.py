@@ -4,6 +4,8 @@ import time
 from loguru import logger
 
 project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if not os.path.exists(project_dir + '/html'):
+    os.makedirs(project_dir + '/html', exist_ok=True)
 
 
 def _log_formatter(record):

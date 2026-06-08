@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from typing import Optional
-from models import Base
+from models import Base, DefaultDto
 
 from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, String
@@ -24,7 +24,7 @@ class NoticeAttachment(Base):
                                                  comment="更新时间")
 
 
-class NoticeAttachmentDto(BaseModel):
+class NoticeAttachmentDto(DefaultDto):
     """公告附件数据类."""
     model_config = ConfigDict(from_attributes=True)
 

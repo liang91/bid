@@ -1,7 +1,7 @@
 """公告资质要求表."""
 
 from typing import Optional
-from models import Base
+from models import Base, DefaultDto
 
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import BigInteger, ForeignKey, String
@@ -18,7 +18,7 @@ class NoticeQualification(Base):
     name: Mapped[str] = mapped_column(String(128), default="", comment="资质名称")
 
 
-class NoticeQualificationDto(BaseModel):
+class NoticeQualificationDto(DefaultDto):
     """公告资质要求数据类."""
     model_config = ConfigDict(from_attributes=True)
 

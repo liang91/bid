@@ -4,11 +4,10 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from pydantic_core.core_schema import SerializationInfo
 
-from models import Base, _DEFAULT_DATETIME
+from models import Base, _DEFAULT_DATETIME, DefaultDto
 
-from pydantic import BaseModel, Field, ConfigDict, model_serializer, SerializationInfo, model_serializer
+from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import BigInteger, DECIMAL, DateTime, JSON, LargeBinary, String, Text
 from sqlalchemy.dialects.mysql import TINYINT
 from sqlalchemy.orm import Mapped, mapped_column
@@ -51,9 +50,11 @@ class Notice(Base):
     # === 时间节点 ===
     notice_date: Mapped[datetime] = mapped_column(DateTime, default=_DEFAULT_DATETIME, comment="公告发布时间")
     doc_obtain_start: Mapped[datetime] = mapped_column(DateTime, default=_DEFAULT_DATETIME,
-                                                       comment="获取招标文件开始时间")
-    doc_obtain_end: Mapped[datetime] = mapped_column(DateTime, default=_DEFAULT_DATETIME, comment="获取招标文件截止时间")
-    bid_deadline: Mapped[datetime] = mapped_column(DateTime, default=_DEFAULT_DATETIME, comment="招标截止时间")
+                                                       comment="获取招标文件或资格预审文件开始时间")
+    doc_obtain_end: Mapped[datetime] = mapped_column(DateTime, default=_DEFAULT_DATETIME,
+                                                     comment="获取招标文件或资格预审文件截止时间")
+    bid_deadline: Mapped[datetime] = mapped_column(DateTime, default=_DEFAULT_DATETIME,
+                                                   comment="招标截止时间或资格预审文件提交截止")
     bid_open_time: Mapped[datetime] = mapped_column(DateTime, default=_DEFAULT_DATETIME, comment="开标时间")
 
     # === 投标方式 ===
@@ -97,7 +98,7 @@ class Notice(Base):
                                                  comment="更新时间")
 
 
-class NoticeDto(BaseModel):
+class NoticeDto(DefaultDto):
     """招标公告数据类."""
     model_config = ConfigDict(from_attributes=True)
 

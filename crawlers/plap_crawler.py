@@ -8,8 +8,9 @@ from urllib.parse import urljoin, parse_qs, urlparse
 from loguru import logger
 import requests
 from bs4 import BeautifulSoup, Comment
-
-import util
+from datetime import datetime
+from decimal import Decimal
+import json
 from crawlers.crawler import Crawler
 from models import NoticeDto, SiteDto
 
@@ -97,64 +98,50 @@ class PLAPCrawler(Crawler):
             return []
 
         try:
-            import json
             data = json.loads(text)
         except Exception as e:
             logger.warning(f"[解析] JSON 解析失败: {list_url} - {e}")
             return []
 
         notices = []
-        rows = data.get("data", []) if isinstance(data, dict) else []
-        for item in rows:
+        items = data.get("data", []) if isinstance(data, dict) else []
+        for item in items:
             pageurl = item.get("pageurl", "").strip()
             title = item.get("title", "").strip()
             if not pageurl or not title:
                 continue
 
             # 拼接完整 URL
-            detail_url = urljoin(self.base_url, pageurl)
-
+            url = urljoin(self.base_url, pageurl)
             dto = NoticeDto(
                 platform=self.site.platform,
                 part=self.site.part,
                 title=title,
-                url=detail_url,
+                url=url,
             )
-
-            # 地区
-            dto.region_province = "北京"
+            dto.region_province = "北京"  # 地区
             dto.region_city = "北京"
             dto.region_district = item.get("regionName", "")
-            # 项目编号
-            dto.project_no = item.get("openTenderCode", "")
-            # 发布时间
-            notice_time = item.get("noticeTime", "")
+            dto.project_no = item.get("openTenderCode", "")  # 项目编号
+            notice_time = item.get("noticeTime", "")  # 发布时间
             if notice_time:
-                from datetime import datetime
-                try:
-                    dto.notice_date = datetime.strptime(notice_time, "%Y-%m-%d %H:%M:%S")
-                except ValueError:
-                    pass
+                dto.notice_date = datetime.strptime(notice_time, "%Y-%m-%d %H:%M:%S")
 
-            # 预算金额
-            budget_str = item.get("budget", "")
+            budget_str = item.get("budget", "") # 预算金额
             if budget_str:
-                try:
-                    from decimal import Decimal
-                    dto.budget = Decimal(str(budget_str))
-                except Exception:
-                    pass
+                dto.budget = Decimal(str(budget_str))
 
             # 列表接口直接返回详情页 content，保存为 HTML
             content_html = item.get("content", "")
             if content_html:
-                html = self.clean_html(detail_url, content_html)
+                html = self.clean_html(url, content_html)
                 dto.html = self.save_html(0, html)
+                dto.status = 20
 
             notices.append(dto)
         return notices
 
-    def clean_html(self, url: str,  html: str) -> str:
+    def clean_html(self, url: str, html: str) -> str:
         soup = BeautifulSoup(html, "lxml")
         # 优先取 print_part（正文区域）
         main = soup.find("div", id="print_part")

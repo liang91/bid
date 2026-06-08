@@ -36,21 +36,11 @@ class OSS:
 
     @classmethod
     def put(cls, local_path: str, remote_key: str) -> bool:
-        """上传本地文件到 OSS.
-        Args:
-            local_path: 本地文件路径
-            remote_key: OSS 中的对象 Key（路径）
-        Returns:
-            上传是否成功
-        """
+        """上传本地文件到 OSS  local_path: 本地文件路径  remote_key: OSS 中的对象 Key（路径）"""
         try:
             result = cls.client.put_object_from_file(
                 oss.PutObjectRequest(bucket=cls.bucket, key=remote_key),
                 filepath=local_path,
-            )
-            logger.info(
-                f"[OSS] 上传成功: {local_path} -> {remote_key} "
-                f"(status={result.status_code}, request_id={result.request_id})"
             )
             return True
         except Exception as e:
@@ -59,13 +49,7 @@ class OSS:
 
     @classmethod
     def get(cls, remote_key: str, local_path: str) -> bool:
-        """从 OSS 下载文件到本地.
-        Args:
-            remote_key: OSS 中的对象 Key（路径）
-            local_path: 本地保存路径
-        Returns:
-            下载是否成功
-        """
+        """从 OSS 下载文件到本地. remote_key: OSS 中的对象 Key（路径） local_path: 本地保存路径"""
         try:
             result = cls.client.get_object(oss.GetObjectRequest(bucket=cls.bucket, key=remote_key))
 
@@ -77,11 +61,6 @@ class OSS:
             with result.body as body_stream:
                 with open(local_path, "wb") as f:
                     f.write(body_stream.read())
-
-            logger.info(
-                f"[OSS] 下载成功: {remote_key} -> {local_path} "
-                f"(status={result.status_code}, request_id={result.request_id})"
-            )
             return True
         except Exception as e:
             logger.error(f"[OSS] 下载异常: {e}")
@@ -89,14 +68,7 @@ class OSS:
 
     @classmethod
     def object_exists(cls, remote_key: str) -> bool:
-        """检查 OSS 对象是否存在.
-
-        Args:
-            remote_key: OSS 中的对象 Key（路径）
-
-        Returns:
-            对象是否存在
-        """
+        """检查 OSS 对象是否存在 remote_key: OSS 中的对象 Key（路径）"""
         try:
             result = cls.client.head_object(
                 oss.HeadObjectRequest(bucket=cls.bucket, key=remote_key)
@@ -108,14 +80,7 @@ class OSS:
 
     @classmethod
     def delete_object(cls, remote_key: str) -> bool:
-        """删除 OSS 对象.
-
-        Args:
-            remote_key: OSS 中的对象 Key（路径）
-
-        Returns:
-            删除是否成功
-        """
+        """删除 OSS 对象 remote_key: OSS 中的对象 Key（路径）"""
         try:
             result = cls.client.delete_object(
                 oss.DeleteObjectRequest(bucket=cls.bucket, key=remote_key)
@@ -131,15 +96,7 @@ class OSS:
 
     @classmethod
     def url(cls, remote_key: str, expires: int = 3600) -> str | None:
-        """生成带签名的临时访问 URL.
-
-        Args:
-            remote_key: OSS 中的对象 Key（路径）
-            expires: URL 有效期（秒），默认 1 小时
-
-        Returns:
-            签名 URL，失败时返回 None
-        """
+        """生成带签名的临时访问 URL. remote_key: OSS 中的对象 Key（路径） expires: URL 有效期（秒），默认 1 小时"""
         try:
             url = cls.client.presign(
                 oss.GetObjectRequest(bucket=cls.bucket, key=remote_key),
