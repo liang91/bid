@@ -125,10 +125,8 @@ class PLAPCrawler(Crawler):
             dto.region_province = "北京"
             dto.region_city = "北京"
             dto.region_district = item.get("regionName", "")
-
             # 项目编号
             dto.project_no = item.get("openTenderCode", "")
-
             # 发布时间
             notice_time = item.get("noticeTime", "")
             if notice_time:
@@ -150,13 +148,13 @@ class PLAPCrawler(Crawler):
             # 列表接口直接返回详情页 content，保存为 HTML
             content_html = item.get("content", "")
             if content_html:
-                dto.html = self.save_cleaned_html(content_html)
+                html = self.clean_html(detail_url, content_html)
+                dto.html = self.save_html(0, html)
 
             notices.append(dto)
         return notices
 
-    @staticmethod
-    def save_cleaned_html(html: str) -> str:
+    def clean_html(self, url: str,  html: str) -> str:
         soup = BeautifulSoup(html, "lxml")
         # 优先取 print_part（正文区域）
         main = soup.find("div", id="print_part")
@@ -173,7 +171,7 @@ class PLAPCrawler(Crawler):
             comment.extract()
         # 去掉标签属性（保留 href/src）
         for tag in main.find_all():
-            tag.attrs = {k: v for k, v in tag.attrs.items() if k in ("href", "src")}
+            tag.attrs = {k: urljoin(url, v) for k, v in tag.attrs.items() if k in ("href", "src")}
         content = str(main)
         content = content.replace("<span>", "").replace("</span>", "")
-        return util.save_html(content)
+        return content

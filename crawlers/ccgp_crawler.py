@@ -5,7 +5,6 @@ from urllib.parse import urljoin
 from loguru import logger
 from bs4 import BeautifulSoup, Comment
 
-import util
 from crawlers.crawler import Crawler
 from models import NoticeDto, SiteDto
 
@@ -66,8 +65,7 @@ class CCGPCrawler(Crawler):
                 notices.append(dto)
         return notices
 
-    @staticmethod
-    def save_cleaned_html(html: str) -> str:
+    def clean_html(self, url: str, html: str) -> str:
         soup = BeautifulSoup(html, "lxml")
         main = soup.find('div', class_='vF_deail_maincontent')
         # 去掉js/css代码
@@ -78,7 +76,7 @@ class CCGPCrawler(Crawler):
             comment.extract()
         # 去掉标签属性
         for tag in main.find_all():
-            tag.attrs = {k: v for k, v in tag.attrs.items() if k == 'href'}
+            tag.attrs = {k: urljoin(url, v) for k, v in tag.attrs.items() if k == 'href'}
         content = str(main)
         content = content.replace("<span>", "").replace("</span>", "")
-        return util.save_html(content)
+        return content

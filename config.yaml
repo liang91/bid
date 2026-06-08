@@ -53,3 +53,7 @@ push:
   detail_base_url: "https://your-domain.com"
   # 是否启用推送（调试时可关闭）
   enabled: true
+
+aliyun:
+  access_key_id: "LTAI5tQ6Djja9qQDRTRyFVPL"
+  access_key_secret: "kJAhzSy6bNzMa7JXP8jmS7FjiDV9cW"

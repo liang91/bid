@@ -6,3 +6,4 @@ __pycache__
 html
 log.txt
 log.*.txt
+config.yaml

@@ -1,11 +1,13 @@
+import os
 import time
 
 import requests
 from loguru import logger
 
+import util
 from dao import LatestUrlDao, NoticeDao
 from models import SiteDto, LatestUrlDto, NoticeDto
-from providers import LLMParser
+from providers import LLMParser, OSS
 
 
 class Crawler:
@@ -140,7 +142,7 @@ class Crawler:
             return []
 
         result: list[NoticeDto] = []
-        batches = [notices[i:i+50] for i in range(0, len(notices), 50)]
+        batches = [notices[i:i+30] for i in range(0, len(notices), 30)]
         for batch in batches:
             rows: list[str] = []
             for idx, notice in enumerate(batch):
@@ -184,8 +186,9 @@ class Crawler:
             for notice in notices:
                 html = self.get(notice.url)
                 if html:
-                    html_path = self.save_cleaned_html(html)
-                    NoticeDao.update_html(notice.id, html_path)
+                    html = self.clean_html(notice.url, html)
+                    key = self.save_html(notice.id, html)
+                    NoticeDao.update_html(notice.id, key)
                     success += 1
                     time.sleep(1)
                 else:
@@ -214,3 +217,17 @@ class Crawler:
 
     def parse_list_page(self, url: str) -> list[NoticeDto]:
         pass
+
+    def clean_html(self, url: str, html: str) -> str:
+        pass
+
+    @staticmethod
+    def save_html(id: int, html: str) -> str:
+        if not id:
+            id = int(time.time() * 1000000)
+        object_key = f"html/{id}.html"
+        filepath = os.path.join(util.project_dir, object_key)
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(html)
+        OSS.put(filepath, object_key)
+        return object_key
