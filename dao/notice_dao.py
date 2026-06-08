@@ -1,6 +1,5 @@
 """notices 表的数据访问对象（SQLAlchemy 2.0）."""
 
-from datetime import datetime
 from decimal import Decimal
 from typing import List
 from loguru import logger
@@ -8,7 +7,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.dialects.mysql import insert
 
 from models import Notice, NoticeDto
-from dao import db, orm_to_dto
+from dao import db
 
 
 class NoticeDao:

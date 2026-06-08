@@ -48,9 +48,8 @@ class SupplierDao:
         if not dto.id:
             return False
         with db.begin() as session:
-            stmt = update(Supplier).where(Supplier.id == dto.id).values(
-                dto.model_dump(exclude={"id", "created_at"})
-            )
+            data = dto.model_dump(exclude={"id", "created_at"})
+            stmt = update(Supplier).where(Supplier.id == dto.id).values(data)
             res = session.execute(stmt)
             return res.rowcount == 1
 

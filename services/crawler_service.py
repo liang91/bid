@@ -1,6 +1,10 @@
 import importlib
+from datetime import datetime
+
 from loguru import logger
-from models import SiteDto
+
+from dao import SiteDao, JobLogDao
+from models import SiteDto, JobLogDto
 
 
 class CrawlerService:
@@ -34,17 +38,31 @@ class CrawlerService:
             logger.error(f"{job_name}加载爬虫类失败: {e}")
             return None
 
-    @staticmethod
-    def run(site: SiteDto) -> dict:
-        job_name = site.job_name()
-        crawler = CrawlerService.get_crawler(site)
+    @classmethod
+    def crawl(cls):
+        sites = SiteDao.enabled()
+        sites = sorted(sites, key=lambda row: row.priority)
+        for site in sites:
+            job_name = site.job_name()
+            log_id = JobLogDao.create(JobLogDto(job_name=job_name, trigger_time=datetime.now(), status=0))
+            logger.info(f"{job_name}-{log_id} 开始执行")
 
-        logger.info(f"{job_name}开始爬取")
-        if site.action == "fetch_list":
-            result = crawler.fetch_list()
-        elif site.action == "fetch_html":
-            result = crawler.fetch_html()
-        else:
-            raise ValueError(f"不支持的的动作")
-        logger.info(f"{job_name}爬取结果:{result}")
-        return result
+            try:
+                crawler = cls.get_crawler(site)
+                logger.info(f"{job_name}开始爬取")
+                if site.action == "fetch_list":
+                    result = crawler.fetch_list()
+                elif site.action == "fetch_html":
+                    result = crawler.fetch_html()
+                else:
+                    raise ValueError(f"不支持的的动作")
+
+                count = 0
+                if isinstance(result, dict):
+                    count = result.get("created") or result.get("updated") or 0
+
+                JobLogDao.update(log_id, status=1, record_count=count, message="success")
+                logger.info(f"{job_name}-{log_id} 执行成功")
+            except Exception as e:
+                JobLogDao.update(log_id, status=2, message=str(e))
+                logger.error(f"{job_name}:{log_id} 执行失败: {e}")

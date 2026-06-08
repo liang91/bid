@@ -19,15 +19,15 @@ class Site(Base):
     platform: Mapped[str] = mapped_column(String(64), default="", comment="网站名称，如：中国政府采购网")
     part: Mapped[str] = mapped_column(String(32), default="", comment="栏目名称，如：地方公告")
     action: Mapped[str] = mapped_column(String(32), default="", comment="执行的动作，如：fetch_list,fetch_html")
-    crawler: Mapped[str] = mapped_column(String(128), default="",
-                                         comment="爬虫类全路径，如：crawlers.ccgp_crawler.CCGPCrawler")
+    priority: Mapped[int] = mapped_column(Integer, default=0, comment="动作执行优先级")
+    crawler: Mapped[str] = mapped_column(String(128), default="", comment="爬虫类类名，如：CCGPCrawler")
     url: Mapped[str] = mapped_column(String(256), default="", comment="网站基础URL")
 
     enabled: Mapped[int] = mapped_column(TINYINT, default=1, comment="是否启用：0禁用 1启用")
     schedule_type: Mapped[str] = mapped_column(String(16), default="interval", comment="调度类型：interval/cron")
     schedule_config: Mapped[dict] = mapped_column(JSON, comment="调度配置，如：{minutes: 60} 或 {hour: 8, minute: 30}")
 
-    pages: Mapped[int] = mapped_column(BigInteger, default=10, comment="每次爬取页数")
+    pages: Mapped[int] = mapped_column(Integer, default=10, comment="每次爬取页数")
     delay: Mapped[int] = mapped_column(Integer, default=1, comment="请求间隔（秒）")
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, comment="创建时间")
@@ -43,6 +43,7 @@ class SiteDto(BaseModel):
     platform: str = ""
     part: str = ""
     action: str = "fetch_list"
+    priority: int = 100
     crawler: str = ""
     url: str = ""
     enabled: int = 1

@@ -52,71 +52,58 @@ class ScheduleService:
     # 注册/删除任务
     # -----------------------------------------------------------------------
     @classmethod
-    def register_jobs(cls):
+    def start(cls):
         """从 sites 表读取启用的配置并注册所有定时任务."""
-        sites = SiteDao.enabled()
-        for site in sites:
-            job_name = site.job_name()
 
-            cls.scheduler.add_job(
-                func=cls._wrap,
-                args=(job_name, CrawlerService.run, site),
-                trigger=IntervalTrigger(seconds=30),
-                id=job_name,
-                replace_existing=True,
-            )
-            logger.info(f"{job_name}：已注册任务")
+        cls.scheduler.add_job(
+            func=CrawlerService.crawl,
+            trigger=IntervalTrigger(hours=1),
+            id='crawl',
+            replace_existing=True,
+            next_run_time=datetime.now(),
+        )
+        logger.info("已注册任务:crawl - 每小时执行一次")
 
         # 解析 HTML
         cls.scheduler.add_job(
             func=cls._wrap,
-            args=("parse", cls.job_parse),
-            trigger=CronTrigger(hour=9, minute=0),
+            args=("parse", NoticeService.parse_htmls),
+            trigger=IntervalTrigger(minutes=1),
             id="parse",
             replace_existing=True,
         )
-        logger.info("parse：已注册任务（每天 09:00）")
+        logger.info("已注册任务:parse - 每10分钟执行一次")
 
-        # 全量匹配（粗筛 + 语义排序）
-        cls.scheduler.add_job(
-            func=cls._wrap,
-            args=("match", cls.job_match),
-            trigger=CronTrigger(hour=9, minute=30),
-            id="match",
-            replace_existing=True,
-        )
-        logger.info("match：已注册任务（每天 09:30）")
-
-        # AI 精筛
-        cls.scheduler.add_job(
-            func=cls._wrap,
-            args=("ai_match", cls.job_ai_match),
-            trigger=CronTrigger(hour=10, minute=0),
-            id="ai_match",
-            replace_existing=True,
-        )
-        logger.info("ai_match：已注册任务（每天 10:00）")
+        # # 全量匹配（粗筛 + 语义排序）
+        # cls.scheduler.add_job(
+        #     func=cls._wrap,
+        #     args=("filter", SupplierService.filter_all),
+        #     trigger=CronTrigger(hour=9, minute=30),
+        #     id="filter",
+        #     replace_existing=True,
+        # )
+        # logger.info("已注册任务:filter（每天 09:30）")
+        #
+        # # AI 精筛
+        # cls.scheduler.add_job(
+        #     func=cls._wrap,
+        #     args=("match", SupplierService.match_all),
+        #     trigger=CronTrigger(hour=10, minute=0),
+        #     id="match",
+        #     replace_existing=True,
+        # )
+        # logger.info("已注册任务:match（每天 10:00）")
 
         # 推送高匹配结果给供应商人员（企微1v1）
-        cls.scheduler.add_job(
-            func=cls._wrap,
-            args=("push", cls.job_push),
-            trigger=CronTrigger(hour=10, minute=30),
-            id="push",
-            replace_existing=True,
-        )
-        logger.info("push：已注册任务（每天 10:30）")
+        # cls.scheduler.add_job(
+        #     func=cls._wrap,
+        #     args=("push", PushService.push_daily_top_matches),
+        #     trigger=CronTrigger(hour=10, minute=30),
+        #     id="push",
+        #     replace_existing=True,
+        # )
+        # logger.info("push：已注册任务（每天 10:30）")
 
-    @classmethod
-    def reload_jobs(cls):
-        """热重载：重新从数据库读取配置并更新任务."""
-        logger.info("开始热重载任务配置...")
-        logger.info("热重载完成")
-
-    @classmethod
-    def start(cls):
-        """启动调度器."""
-        cls.register_jobs()
         cls.scheduler.start()
         logger.info("调度器已启动")
         while True:
@@ -128,33 +115,3 @@ class ScheduleService:
         if cls.scheduler.running:
             cls.scheduler.shutdown()
             logger.info("调度器已关闭")
-
-    # -----------------------------------------------------------------------
-    # 具体任务
-    # -----------------------------------------------------------------------
-
-    @classmethod
-    def job_parse(cls, limit: int = 100):
-        """LLM 解析 HTML."""
-        return NoticeService.parse_htmls(limit)
-
-    @classmethod
-    def job_match(cls):
-        """对所有供应商执行粗筛 + 语义排序."""
-        suppliers = SupplierDao.all()
-        for supplier in suppliers:
-            try:
-                SupplierService.filtered_notices(supplier.id)
-            except Exception as e:
-                logger.error(f"[job_match] 供应商 {supplier.id} 匹配失败: {e}")
-        return len(suppliers)
-
-    @classmethod
-    def job_ai_match(cls, limit: int = 100):
-        """批量 AI 精筛."""
-        return SupplierService.ai_match_all(limit=limit)
-
-    @classmethod
-    def job_push(cls):
-        """推送高匹配公告给供应商人员（企业微信1v1）."""
-        return PushService.push_daily_top_matches()

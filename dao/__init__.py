@@ -30,21 +30,6 @@ else:
 
 db = sessionmaker(bind=engine)
 
-
-def orm_to_dto(orm_obj, dto_cls):
-    """将 SQLAlchemy ORM 对象转换为 Pydantic DTO 对象."""
-    kwargs = {}
-    for name, info in dto_cls.model_fields.items():
-        val = getattr(orm_obj, name, None)
-        if val is None:
-            if info.default is not None:
-                val = info.default
-            elif info.default_factory is not None:
-                val = info.default_factory()
-        kwargs[name] = val
-    return dto_cls.model_construct(**kwargs)
-
-
 # 导出各表 DAO 类
 from dao.notice_dao import NoticeDao
 from dao.notice_attachment_dao import NoticeAttachmentDao
