@@ -57,18 +57,18 @@ class SupplierService:
     """
 
     @classmethod
-    def filter_all(cls) -> int:
+    def filter_for_all(cls) -> int:
         """对所有供应商执行粗筛 + 语义排序."""
         suppliers = SupplierDao.all()
         for supplier in suppliers:
             try:
-                cls.filter_one(supplier.id)
+                cls.filter_for_one(supplier.id)
             except Exception as e:
                 logger.error(f"[job_match] 供应商 {supplier.id} 匹配失败: {e}")
         return len(suppliers)
 
     @classmethod
-    def filter_one(cls, supplier_id: int, top_k: int = 200):
+    def filter_for_one(cls, supplier_id: int, top_k: int = 10):
         """
         招标信息推荐，三层匹配架构，本函数执行前两步
             1. 粗筛（SQL硬规则）：时效性、地域、预算
@@ -79,42 +79,29 @@ class SupplierService:
         # 第1层：SQL硬规则粗筛
         # -------------------------------------------------------------------
         supplier = SupplierDao.get(supplier_id)
-        if not supplier:
+        if not supplier or not supplier.profile_embedding:
             return
 
-        candidates = NoticeDao.fetch_candidates(
+        notices = NoticeDao.fetch_candidates(
             region_names=supplier.service_regions,
             min_budget=supplier.min_budget,
             max_budget=supplier.max_budget,
         )
-        if not candidates:
+        # 筛选出有Embedding的公告
+        notices = [notice for notice in notices if notice.supplier_profile_embedding]
+        if not notices:
             logger.info(f"[filtered_notices] 供应商 {supplier.id} 硬规则粗筛后无候选")
             return
 
-        logger.info(f"[filtered_notices] 供应商 {supplier.id} 硬规则粗筛后: {len(candidates)} 条")
+        logger.info(f"[filtered_notices] 供应商 {supplier.id} 硬规则粗筛后: {len(notices)} 条")
 
         # -------------------------------------------------------------------
         # 第2层：语义排序（Embedding 余弦相似度）
         # -------------------------------------------------------------------
-        if not supplier.profile_embedding:
-            return
-
-        # 收集有 embedding 的公告（supplier_profile_embedding 为 BLOB，需反序列化）
-        candidate_with_vectors = []
-        candidate_vectors = []
-        for candidate in candidates:
-            if not candidate.supplier_profile_embedding:
-                continue
-            candidate_with_vectors.append(candidate)
-            candidate_vectors.append(candidate.supplier_profile_embedding)
-
-        if not candidate_with_vectors:
-            logger.warning(f"[filtered_notices] 供应商 {supplier.id} 候选公告均无 embedding，跳过语义排序")
-            return
-
         # 批量矩阵计算相似度
-        scores = LLMEmbedding.similarities(supplier.profile_embedding, candidate_vectors)
-        scored = list(zip(scores, candidate_with_vectors))
+        notice_vectors = [notice.supplier_profile_embedding for notice in notices]
+        scores = LLMEmbedding.similarities(supplier.profile_embedding, notice_vectors)
+        scored = list(zip(scores, notices))
         scored.sort(key=lambda x: x[0], reverse=True)
 
         filtered_notices = [MatchNoticeScore(score=score, notice_id=notice.id) for score, notice in scored[:top_k]]
@@ -125,15 +112,11 @@ class SupplierService:
     # AI 精筛
     # -----------------------------------------------------------------------
     @classmethod
-    def match_one(cls, match_id: int, top_n: int = 20) -> bool:
+    def match_for_one(cls, match_id: int, top_n: int = 20) -> bool:
         """对单个 Match 记录进行 AI 精筛。
-
         Args:
             match_id: 粗筛后的 Match 记录 ID
             top_n: 提交给 LLM 评估的候选公告数量（控制 token 消耗）
-
-        Returns:
-            是否成功完成精筛
         """
         match = MatchDao.get(match_id)
         if not match or not match.filtered_notices:
@@ -146,23 +129,18 @@ class SupplierService:
             return False
 
         # 获取候选公告详情（取 top_n 条）
-        candidate_notices: list[NoticeDto] = []
+        notices: list[NoticeDto] = []
         for item in match.filtered_notices[:top_n]:
             notice = NoticeDao.get(item.notice_id)
             if notice:
-                candidate_notices.append(notice)
-
-        if not candidate_notices:
+                notices.append(notice)
+        if not notices:
             logger.warning(f"[ai_match] Match {match_id} 无法获取任何候选公告详情")
             return False
 
-        logger.info(
-            f"[ai_match] 供应商 {match.supplier_id} Match {match_id} "
-            f"开始对 {len(candidate_notices)} 条公告进行 AI 评估"
-        )
+        logger.info(f"[ai_match] 供应商 {match.supplier_id} Match:{match_id} 开始对 {len(notices)} 条公告进行 AI 评估")
 
-        prompt = cls.match_prompt(supplier, candidate_notices)
-
+        prompt = cls.match_prompt(supplier, notices)
         try:
             result = LLMParser.parse(prompt)
         except Exception as e:
@@ -208,27 +186,25 @@ class SupplierService:
         return success
 
     @classmethod
-    def match_all(cls, limit: int = 100) -> None:
+    def match_for_all(cls, limit: int = 100) -> None:
         """批量处理所有 status=20（已完成粗筛）的 Match 记录。"""
         matches = MatchDao.fetch_by_status(status=20, limit=limit)
         if not matches:
             logger.info("[ai_match_all] 没有待精筛的 Match 记录")
             return
-
         logger.info(f"[ai_match_all] 发现 {len(matches)} 条待精筛记录")
-        for match in matches:
-            try:
-                with ThreadPoolExecutor(max_workers=20) as executor:
-                    executor.submit(cls.match_one, match.id)
-            except Exception as e:
-                logger.error(f"[ai_match_all] Match {match.id} 精筛异常: {e}")
+
+        with ThreadPoolExecutor(max_workers=20) as executor:
+            for match in matches:
+                try:
+                    executor.submit(cls.match_for_one, match.id)
+                except Exception as e:
+                    logger.error(f"[ai_match_all] Match {match.id} 精筛异常: {e}")
 
     @classmethod
     def match_prompt(cls, supplier, notices: list[NoticeDto]) -> str:
         """构建 AI 精筛 Prompt。"""
-        notices_text = "\n".join(
-            cls.notice_text(n, i + 1) for i, n in enumerate(notices)
-        )
+        notices_text = "\n".join(cls.notice_text(n, i + 1) for i, n in enumerate(notices))
 
         return cls.PROMPT.format(
             company_name=supplier.company_name or "未填写",

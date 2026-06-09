@@ -130,10 +130,11 @@ class NoticeService:
         notices = NoticeDao.fetch_unparsed(limit)
         if not notices:
             logger.info("没有HTML需要解析")
-            return
+            return 0
         with ThreadPoolExecutor(max_workers=100) as executor:
             for notice in notices:
                 executor.submit(NoticeService.parse_html, notice)
+        return len(notices)
 
     @classmethod
     def get_html(cls, key: str) -> str:

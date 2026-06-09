@@ -142,10 +142,10 @@ class Crawler:
         pass
 
     @staticmethod
-    def save_html(id: int, html: str) -> str:
-        if not id:
-            id = int(time.time() * 1000000)
-        object_key = f"html/{id}.html"
+    def save_html(fd: int, html: str) -> str:
+        if not fd:
+            fd = int(time.time() * 1000000)
+        object_key = f"html/{fd}.html"
         filepath = os.path.join(util.project_dir, object_key)
         with open(filepath, "w", encoding="utf-8") as f:
             f.write(html)

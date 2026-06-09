@@ -50,7 +50,7 @@ class NoticeDao:
             region_names: list[str],
             min_budget: Decimal,
             max_budget: Decimal,
-            limit: int = 25,
+            limit: int = 1000,
     ) -> list[NoticeDto]:
         """硬规则粗筛：根据地域、预算、采购方式、排除项、CA/中小企业、时效性筛选公告."""
         stmt = select(Notice).where(

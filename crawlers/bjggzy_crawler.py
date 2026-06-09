@@ -91,13 +91,8 @@ class BJGGZYCrawler(Crawler):
 
     def clean_html(self, url: str, html: str) -> str:
         soup = BeautifulSoup(html, "lxml")
-        main = soup.find("div", class_="div-article2")
-        if not main:
-            main = soup.find("div", class_="newsCon")
-        if not main:
-            main = soup.find("div", class_="div-content")
-        if not main:
-            # 兜底：取 body
+        main = soup.find("div", class_="div-content")
+        if not main: # 兜底：取 body
             main = soup.find("body")
 
         # 去掉 js/css 代码

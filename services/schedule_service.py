@@ -54,7 +54,7 @@ class ScheduleService:
     @classmethod
     def start(cls):
         """从 sites 表读取启用的配置并注册所有定时任务."""
-
+        # 获取符合条件的网页链接&网页内容
         cls.scheduler.add_job(
             func=CrawlerService.crawl,
             trigger=IntervalTrigger(hours=1),
@@ -64,7 +64,7 @@ class ScheduleService:
         )
         logger.info("已注册任务:crawl - 每小时执行一次")
 
-        # 解析 HTML
+        # 通过大模型将网页内容解析成结构化数据
         cls.scheduler.add_job(
             func=cls._wrap,
             args=("parse", NoticeService.parse_htmls),
@@ -77,7 +77,7 @@ class ScheduleService:
         # # 全量匹配（粗筛 + 语义排序）
         # cls.scheduler.add_job(
         #     func=cls._wrap,
-        #     args=("filter", SupplierService.filter_all),
+        #     args=("filter", SupplierService.filter_for_all),
         #     trigger=CronTrigger(hour=9, minute=30),
         #     id="filter",
         #     replace_existing=True,
