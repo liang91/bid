@@ -57,3 +57,8 @@ push:
 aliyun:
   access_key_id: "LTAI5tQ6Djja9qQDRTRyFVPL"
   access_key_secret: "kJAhzSy6bNzMa7JXP8jmS7FjiDV9cW"
+
+# 微信小程序配置
+wx_mini:
+  appid: "wx_appid_placeholder"
+  secret: "wx_secret_placeholder"

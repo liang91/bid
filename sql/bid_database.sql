@@ -167,11 +167,10 @@ CREATE TABLE supplier (
 
     -- 资质证书（JSON简化存储）
     qualifications JSON COMMENT '资质证书列表：[{name, cert_no, valid_until}]',
-    qualification_summary VARCHAR(512) NOT NULL DEFAULT '' COMMENT '资质摘要，用于快速匹配，如：医疗机构执业许可证+临床基因扩增检验实验室资质',
 
     -- 需求偏好
-    min_budget DECIMAL(15,2) NOT NULL DEFAULT 0.00 COMMENT '最低预算偏好（0表示不限）',
-    max_budget DECIMAL(15,2) NOT NULL DEFAULT 999999999.99 COMMENT '最高预算偏好',
+    min_budget int NOT NULL DEFAULT 0 COMMENT '最低预算偏好（0表示不限）',
+    max_budget int NOT NULL DEFAULT 999999999 COMMENT '最高预算偏好',
     preferred_methods VARCHAR(128) NOT NULL DEFAULT '' COMMENT '偏好采购方式，逗号分隔，如：公开招标,竞争性谈判',
 
     -- 服务范围
@@ -183,9 +182,7 @@ CREATE TABLE supplier (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
-    INDEX idx_region (province, city),
-    FULLTEXT INDEX ft_business_scope (business_scope),
-    FULLTEXT INDEX ft_qualification_summary (qualification_summary)
+    INDEX idx_region (province, city)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='供应商画像表（MVP精简版）';
 
 -- ------------------------------------------------------------
@@ -209,23 +206,7 @@ CREATE TABLE match_results (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
 
     supplier_id BIGINT NOT NULL DEFAULT 0 COMMENT '供应商ID（对应supplier.id）',
-    filtered_notices JSON NULL COMMENT '粗筛后的公告',
-
-    -- 第二层：AI精筛结果
-    ai_match_score DECIMAL(5,2) NOT NULL DEFAULT 0.00 COMMENT 'AI匹配分数（0-100）',
-    ai_match_level VARCHAR(16) NOT NULL DEFAULT '' COMMENT 'AI匹配等级：高(>=80)/中(60-79)/低(<60)/不匹配',
-    ai_match_reasons TEXT COMMENT 'AI给出的匹配理由（多行文本）',
-    ai_risk_tips TEXT COMMENT 'AI给出的风险提示（多行文本）',
-    ai_key_matching_points TEXT COMMENT 'AI提取的关键匹配点（JSON或文本）',
-    ai_mismatch_points TEXT COMMENT 'AI提取的不匹配点（JSON或文本）',
-    ai_recommendation VARCHAR(64) NOT NULL DEFAULT '' COMMENT 'AI建议：强烈推荐/推荐/谨慎考虑/不推荐',
-    ai_raw_response TEXT COMMENT 'AI原始返回内容（用于调试和追溯）',
-    ai_call_time DATETIME NOT NULL DEFAULT '1970-01-01 00:00:00' COMMENT 'AI调用时间',
-
-    -- 第三层：最终排序与输出
-    final_score DECIMAL(5,2) NOT NULL DEFAULT 0.00 COMMENT '最终排序分数（目前等于ai_match_score，预留加权计算）',
-    final_rank INT NOT NULL DEFAULT 0 COMMENT '该供应商所有匹配中的排名（1=Top1）',
-    is_top3 TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否进入Top3推荐：0否 1是',
+    matched_notices JSON NULL COMMENT '筛选/AI匹配后的公告',
 
     -- 推送状态
     push_status TINYINT NOT NULL DEFAULT 0 COMMENT '推送状态：0未推送 1已推送 2推送失败 3用户已读 4用户忽略',
@@ -321,7 +302,9 @@ VALUES
 -- 人员表: 供应商下的具体人员（企微推送目标）
 -- ------------------------------------------------------------
 CREATE TABLE users (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '自增主键ID',
+    user_id int NOT NULL DEFAULT 0 COMMENT '用户ID',
+    platform varchar(16) NOT NULL DEFAULT '' COMMENT '终端平台',
     supplier_id BIGINT NOT NULL DEFAULT 0 COMMENT '所属供应商ID',
 
     -- 基础信息
@@ -329,23 +312,20 @@ CREATE TABLE users (
     phone VARCHAR(20) NOT NULL DEFAULT '' COMMENT '手机号',
     email VARCHAR(128) NOT NULL DEFAULT '' COMMENT '邮箱',
 
+    -- 微信小程序 --
+    wx_openid VARCHAR(128) NOT NULL DEFAULT '' COMMENT '微信小程序openid',
+    wx_unionid VARCHAR(128) NOT NULL DEFAULT '' COMMENT '微信unionid',
+
     -- 企业微信绑定（客户联系）
     wechat_external_userid VARCHAR(64) NOT NULL DEFAULT '' COMMENT '个人微信在企业微信中的外部联系人ID',
-    wechat_follow_user_id VARCHAR(64) NOT NULL DEFAULT '' COMMENT '跟进该人员的我方员工企微UserID',
-    wechat_bind_time DATETIME DEFAULT NULL COMMENT '企微绑定时间',
-    wechat_bind_state VARCHAR(128) NOT NULL DEFAULT '' COMMENT '绑定时的二维码state参数',
+    wechat_follower_id VARCHAR(64) NOT NULL DEFAULT '' COMMENT '跟进该人员的我方员工企微UserID',
 
     -- 状态
-    is_primary TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否主要联系人: 1=是 0=否',
     status TINYINT(1) NOT NULL DEFAULT 1 COMMENT '状态: 1=正常 0=禁用',
 
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-
-    INDEX idx_supplier_id (supplier_id),
-    INDEX idx_wechat_external_userid (wechat_external_userid),
-    INDEX idx_wechat_follow_user_id (wechat_follow_user_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='供应商人员表';
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户表';
 
 -- ------------------------------------------------------------
 -- 用户-公告互动表 user_notice_interactions（支撑小程序 Feed 收藏/不感兴趣）

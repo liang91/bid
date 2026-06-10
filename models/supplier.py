@@ -1,20 +1,13 @@
 """供应商画像表."""
 
 from datetime import datetime
-from decimal import Decimal
 from typing import Optional
 from models import Base
 
 from pydantic import BaseModel, Field, ConfigDict
-from sqlalchemy import Integer, BigInteger, DateTime, DECIMAL, LargeBinary, JSON, String, Text
+from sqlalchemy import Integer, BigInteger, DateTime, LargeBinary, JSON, String
 from sqlalchemy.dialects.mysql import TINYINT
 from sqlalchemy.orm import Mapped, mapped_column
-
-
-class SupplierQualification(BaseModel):
-    name: str = ''
-    cert_no: str = ''
-    valid_until: str = ''
 
 
 class Supplier(Base):
@@ -34,17 +27,16 @@ class Supplier(Base):
     ca_ready: Mapped[int] = mapped_column(TINYINT, default=0, comment="是否具备CA")
 
     # === 业务范围 ===
-    business_scope: Mapped[Optional[str]] = mapped_column(Text, comment="业务范围")
+    business_scopes: Mapped[list[str]] = mapped_column(JSON, comment="业务范围")
     service_regions: Mapped[list[str]] = mapped_column(JSON, default=[], comment="可服务地区列表")
     profile_embedding: Mapped[bytes | None] = mapped_column(LargeBinary, comment="供应商画像语义向量")
 
     # === 资质证书 ===
-    qualifications: Mapped[list[SupplierQualification] | None] = mapped_column(JSON, default=[], comment="资质证书列表")
-    qualification_summary: Mapped[str] = mapped_column(String(512), default="", comment="资质摘要")
+    qualifications: Mapped[list[str] | None] = mapped_column(JSON, default=[], comment="资质证书列表")
 
     # === 需求偏好 ===
-    min_budget: Mapped[Decimal] = mapped_column(DECIMAL(15, 2), default=Decimal("0.00"), comment="最小预算")
-    max_budget: Mapped[Decimal] = mapped_column(DECIMAL(15, 2), default=Decimal("999999999.99"), comment="最大预算")
+    min_budget: Mapped[int] = mapped_column(Integer, default=0, comment="最小预算")
+    max_budget: Mapped[int] = mapped_column(Integer, default=999999999, comment="最大预算")
     preferred_methods: Mapped[str] = mapped_column(String(128), default="", comment="偏好采购方式")
 
     # === 联合体 ===
@@ -70,13 +62,12 @@ class SupplierDto(BaseModel):
     district: str = ""
     sme_status: int = 0
     ca_ready: int = 0
-    business_scope: str = ""
+    business_scopes: list[str] = []
     service_regions: list[str] = []
     profile_embedding: bytes | None = None
-    qualifications: list[SupplierQualification] = []
-    qualification_summary: str = ""
-    min_budget: Decimal = Decimal("0.00")
-    max_budget: Decimal = Decimal("999999999.99")
+    qualifications: list[str] = []
+    min_budget: int = 0
+    max_budget: int = 999999999
     preferred_methods: str = ""
     joint_bid_willing: int = 0
     excluded_keywords: str = ""

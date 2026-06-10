@@ -7,7 +7,7 @@
 USE bid;
 
 INSERT INTO suppliers
-(company_name, company_scale, province, city, district, business_scope, qualifications, qualification_summary, min_budget, max_budget, sme_status, ca_ready, preferred_methods, joint_bid_willing, excluded_keywords)
+(company_name, company_scale, province, city, district, business_scopes, qualifications, qualification_summary, min_budget, max_budget, sme_status, ca_ready, preferred_methods, joint_bid_willing, excluded_keywords)
 VALUES
 ('云智联科技有限公司', '中型', '四川省', '成都市', '高新区', '云计算平台,大数据服务,IT运维,系统集成', '[{"name": "信息系统集成及服务资质", "cert_no": "XZ510001", "valid_until": "2027-06-30"}, {"name": "ISO27001信息安全管理", "cert_no": "IS027001-2024-0088", "valid_until": "2027-03-15"}]', '信息系统集成及服务资质+ISO27001', 500000.00, 50000000.00, 1, 0, '公开招标,竞争性磋商', 1, ''
 ('赛博安全软件股份有限公司', '中型', '北京市', '北京市', '海淀区', '网络安全,等保测评,渗透测试,安全运维', '[{"name": "网络安全等级测评资质", "cert_no": "DJCP-110001", "valid_until": "2026-12-31"}, {"name": "ISO27001", "cert_no": "IS027001-2024-0012", "valid_until": "2027-01-20"}]', '网络安全等级测评资质+ISO27001+国家信息安全服务资质', 300000.00, 30000000.00, 1, 0, '公开招标', 0, ''

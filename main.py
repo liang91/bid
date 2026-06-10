@@ -17,7 +17,6 @@ from api.feed_controller import FeedController
 from api.notice_controller import NoticeController
 from api.user_controller import UserController
 from api.supplier_controller import SupplierController
-from api.dict_controller import DictController
 
 app = FastAPI(
     title="公装招标推荐 API",
@@ -53,7 +52,6 @@ app.include_router(FeedController().router, prefix="/api")
 app.include_router(NoticeController().router, prefix="/api")
 app.include_router(UserController().router, prefix="/api")
 app.include_router(SupplierController().router, prefix="/api")
-app.include_router(DictController().router, prefix="/api")
 
 
 @app.post("/")

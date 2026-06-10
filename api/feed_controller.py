@@ -4,7 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from api.schemas import (
     Res,
@@ -14,6 +14,7 @@ from dao import (
     NoticeDao, UserDao, SupplierDao, MatchDao,
     UserNoticeInteractionDao,
 )
+from util.auth import Auth
 
 
 class FeedController:
@@ -102,11 +103,12 @@ class FeedController:
             is_favorite=is_favorite,
         )
 
-    def list(self, req: FeedReq):
+    def list(self, req: FeedReq, current_user: dict = Depends(Auth.user)):
         """获取推荐招标列表."""
-        user = UserDao.get(req.user_id)
+        user_id = current_user["user_id"]
+        user = UserDao.get(user_id)
         if not user:
-            raise HTTPException(status_code=404, detail=f"用户不存在: {req.user_id}")
+            raise HTTPException(status_code=404, detail=f"用户不存在: {user_id}")
 
         supplier = SupplierDao.get(user.supplier_id) if user.supplier_id else None
         if not supplier:
@@ -135,7 +137,7 @@ class FeedController:
 
         # 3. 排除不感兴趣的
         candidate_ids = [n.id for n in candidates if n.id]
-        interactions = UserNoticeInteractionDao.fetch_interactions(req.user_id, candidate_ids)
+        interactions = UserNoticeInteractionDao.fetch_interactions(user_id, candidate_ids)
 
         filtered = []
         for notice in candidates:

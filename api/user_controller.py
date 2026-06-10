@@ -1,32 +1,73 @@
 """用户路由 —— Controller 类实现."""
 
 from datetime import datetime
-from fastapi import APIRouter, HTTPException
-
-from api.schemas import (
-    Res,
-    FavoriteListReq, FavoriteListRes, FavoriteListItem,
-)
+from time import time
+from fastapi import APIRouter, Depends, HTTPException
+from api.schemas import (Res, FavoriteListReq, FavoriteListRes, FavoriteListItem, WxLoginReq, WxLoginRes)
 from dao import UserDao, UserNoticeInteractionDao, NoticeDao
+from models import UserDto
+from providers import WeChat
+from util import Auth
 
 
 class UserController:
     """用户控制器."""
 
     def __init__(self):
-        self.router = APIRouter(prefix="/users", tags=["Users"])
-        self.router.add_api_route(
-            "/favorites", self.get_user_favorites, methods=["POST"],
-            response_model=Res[FavoriteListRes],
+        self.router = APIRouter(prefix="/user", tags=["User"])
+        self.router.add_api_route("/wx_login", self.wx_login, methods=["POST"], response_model=Res[WxLoginRes])
+        self.router.add_api_route("/favorites", self.get_user_favorites, methods=["POST"],
+                                  response_model=Res[FavoriteListRes])
+
+    @classmethod
+    def wx_login(cls, req: WxLoginReq):
+        """小程序微信登录.
+        前端调用 wx.login() 获取 code 后传入，后端向微信换取 openid/unionid，
+        自动完成用户注册（id 为当前时间戳秒级）并返回 JWT token。
+        """
+        login_res = WeChat.login(req.code)
+        if login_res.get("errcode"):
+            raise HTTPException(
+                status_code=400,
+                detail=login_res.get("errmsg", "微信登录失败"),
+            )
+
+        openid = login_res.get("openid", "")
+        unionid = login_res.get("unionid", "")
+
+        if not openid:
+            raise HTTPException(status_code=400, detail="未能获取微信用户信息")
+
+        # 查找或创建用户
+        user = UserDao.get_by_oid(openid)
+        if not user:
+            user_id = int(time())
+            user_dto = UserDto(
+                user_id=user_id,
+                platform=req.platform,
+                wx_openid=openid,
+                wx_unionid=unionid,
+            )
+            UserDao.create(user_dto)
+            user = UserDao.get_by_uid(user_id)
+
+        token = Auth.gen_token(user_id=user.user_id, platform=req.platform)
+
+        return Res(
+            data=WxLoginRes(
+                token=token
+            )
         )
 
-    def get_user_favorites(self, req: FavoriteListReq):
+    @classmethod
+    def get_user_favorites(cls, req: FavoriteListReq, user: dict = Depends(Auth.user)):
         """获取用户收藏列表."""
-        user = UserDao.get(req.user_id)
+        uid = user["user_id"]
+        user = UserDao.get_by_uid(uid)
         if not user:
-            raise HTTPException(status_code=404, detail=f"用户不存在: {req.user_id}")
+            raise HTTPException(status_code=404, detail=f"用户不存在: {uid}")
 
-        interactions = UserNoticeInteractionDao.fetch_favorites(req.user_id, limit=req.limit, offset=req.offset)
+        interactions = UserNoticeInteractionDao.fetch_favorites(uid, limit=req.limit, offset=req.offset)
         notice_ids = [i.notice_id for i in interactions]
 
         notices = {}

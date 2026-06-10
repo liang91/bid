@@ -4,7 +4,6 @@ from typing import Optional, TypeVar, Generic
 from pydantic import BaseModel, Field
 from decimal import Decimal
 
-
 T = TypeVar("T")
 
 
@@ -22,7 +21,7 @@ class Res(BaseModel, Generic[T]):
 # Feed
 # ─────────────────────────────────────────
 class FeedReq(BaseModel):
-    user_id: int = 0
+    user_id: int = 0  # 兼容旧调用，小程序端可不传，由 Token 解析
     limit: int = Field(default=10, ge=1, le=50)
     cursor: Optional[str] = None
 
@@ -93,7 +92,7 @@ class NoticeDetailRes(BaseModel):
 
 
 class FavoriteReq(BaseModel):
-    user_id: int
+    user_id: int = 0  # 兼容旧调用，小程序端可不传，由 Token 解析
     notice_id: int
     action: str = Field(..., pattern="^(add|remove)$")
 
@@ -108,7 +107,7 @@ class NoticeDetailReq(BaseModel):
 
 
 class NotInterestedReq(BaseModel):
-    user_id: int
+    user_id: int = 0  # 兼容旧调用，小程序端可不传，由 Token 解析
     notice_id: int
 
 
@@ -124,7 +123,7 @@ class FavoriteListItem(BaseModel):
 
 
 class FavoriteListReq(BaseModel):
-    user_id: int
+    user_id: int = 0  # 兼容旧调用，小程序端可不传，由 Token 解析
     limit: int = 50
     offset: int = 0
 
@@ -135,32 +134,15 @@ class FavoriteListRes(BaseModel):
 
 
 # ─────────────────────────────────────────
-# Suppliers
+# Auth (小程序登录)
 # ─────────────────────────────────────────
-class AmountRange(BaseModel):
-    min: int
-    max: int
-    display: str
+class WxLoginReq(BaseModel):
+    code: str = Field(..., min_length=1, description="小程序 wx.login 获取的临时登录凭证")
+    platform: str = ''
 
 
-class SupplierSettings(BaseModel):
-    callable_qualifications: list[str]
-    business_types: list[str]
-    amount_range: AmountRange
-    service_regions: list[str]
-
-
-class SupplierSettingsReq(BaseModel):
-    supplier_id: int
-
-
-class SupplierSettingsUpdateReq(BaseModel):
-    supplier_id: int
-    callable_qualifications: list[str]
-    business_types: list[str]
-    min_budget: int
-    max_budget: int
-    service_regions: list[str]
+class WxLoginRes(BaseModel):
+    token: str
 
 
 # ─────────────────────────────────────────
@@ -175,3 +157,17 @@ class DictRes(BaseModel):
     qualifications: list[DictItem]
     business_types: list[DictItem]
     regions: list[DictItem]
+
+
+class SupplierDictRes(BaseModel):
+    qualifications: list[DictItem]
+    regions: list[DictItem]
+
+class SupplierProfile(BaseModel):
+    supplier_id: int = 0
+    company_name: str = Field(default='', min_length=1, max_length=128)
+    qualifications: list[str] = []
+    business_scopes: list[str] = []
+    min_budget: int = 0
+    max_budget: int = 999999999
+    service_regions: list[str] = []

@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from pydantic import TypeAdapter
 from dao import SupplierDao
-from models import SupplierDto, SupplierQualification
+from models import SupplierDto
 
 
 class TestSupplierDao:
@@ -16,12 +16,11 @@ class TestSupplierDao:
             district="昌平",
             sme_status=0,
             ca_ready=0,
-            business_scope="软件开发,网站开发",
+            business_scopes=["软件开发,网站开发"],
             service_regions=['北京'],
-            qualifications=[SupplierQualification(name='ICP经营许可证', cert_no='110', valid_until='2100-10-20')],
-            qualification_summary="ICP经营许可证+人力资源服务许可证",
-            min_budget=Decimal("10000"),
-            max_budget=Decimal("1000000"),
+            qualifications=['ICP经营许可证'],
+            min_budget=10000,
+            max_budget=1000000,
             preferred_methods="公开招标",
         )
         id = SupplierDao.create(dto)

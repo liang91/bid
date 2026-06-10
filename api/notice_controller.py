@@ -1,7 +1,7 @@
 """招标公告详情路由 —— Controller 类实现."""
 
 from datetime import datetime
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from api.schemas import (
     Res,
@@ -9,6 +9,7 @@ from api.schemas import (
     NotInterestedReq,
 )
 from dao import NoticeDao, UserDao, UserNoticeInteractionDao
+from util.auth import Auth
 
 
 class NoticeController:
@@ -29,18 +30,18 @@ class NoticeController:
             response_model=Res[dict],
         )
 
-    def get_notice_detail(self, req: NoticeDetailReq):
+    def get_notice_detail(self, req: NoticeDetailReq, current_user: dict = Depends(Auth.user)):
         """获取招标详情."""
         notice = NoticeDao.get(req.notice_id)
         if not notice:
             raise HTTPException(status_code=404, detail=f"公告不存在: {req.notice_id}")
 
+        user_id = current_user["user_id"]
         is_favorite = False
-        if req.user_id:
-            inter = UserNoticeInteractionDao.get(req.user_id, req.notice_id)
-            if inter:
-                is_favorite = bool(inter.is_favorite)
-            UserNoticeInteractionDao.mark_viewed(req.user_id, req.notice_id)
+        inter = UserNoticeInteractionDao.get(user_id, req.notice_id)
+        if inter:
+            is_favorite = bool(inter.is_favorite)
+        UserNoticeInteractionDao.mark_viewed(user_id, req.notice_id)
 
         v = int(notice.budget)
         if v >= 100000000:
@@ -102,30 +103,24 @@ class NoticeController:
             )
         )
 
-    def toggle_favorite(self, req: FavoriteReq):
+    def toggle_favorite(self, req: FavoriteReq, current_user: dict = Depends(Auth.user)):
         """收藏/取消收藏."""
         notice = NoticeDao.get(req.notice_id)
         if not notice:
             raise HTTPException(status_code=404, detail=f"公告不存在: {req.notice_id}")
 
-        user = UserDao.get(req.user_id)
-        if not user:
-            raise HTTPException(status_code=404, detail=f"用户不存在: {req.user_id}")
-
+        user_id = current_user["user_id"]
         is_fav = 1 if req.action == "add" else 0
-        UserNoticeInteractionDao.upsert_favorite(req.user_id, req.notice_id, is_fav)
+        UserNoticeInteractionDao.upsert_favorite(user_id, req.notice_id, is_fav)
 
         return Res(data=FavoriteRes(success=True, is_favorite=bool(is_fav)))
 
-    def mark_not_interested(self, req: NotInterestedReq):
+    def mark_not_interested(self, req: NotInterestedReq, current_user: dict = Depends(Auth.user)):
         """标记不感兴趣."""
         notice = NoticeDao.get(req.notice_id)
         if not notice:
             raise HTTPException(status_code=404, detail=f"公告不存在: {req.notice_id}")
 
-        user = UserDao.get(req.user_id)
-        if not user:
-            raise HTTPException(status_code=404, detail=f"用户不存在: {req.user_id}")
-
-        UserNoticeInteractionDao.upsert_not_interested(req.user_id, req.notice_id)
+        user_id = current_user["user_id"]
+        UserNoticeInteractionDao.upsert_not_interested(user_id, req.notice_id)
         return Res(data={"is_not_interested": True})
