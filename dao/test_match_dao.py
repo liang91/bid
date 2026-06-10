@@ -1,13 +1,13 @@
 from dao import MatchDao
-from models import MatchDto, MatchNoticeScore
+from models import MatchDto, MatchedNotice
 
 class TestMatchDao:
     def test_create(self):
         dto = MatchDto(
             supplier_id=37,
             filtered_notices=[
-                MatchNoticeScore(notice_id=89, score=0.591),
-                MatchNoticeScore(notice_id=96, score=0.454),
+                MatchedNotice(notice_id=89, score=0.591),
+                MatchedNotice(notice_id=96, score=0.454),
             ],
             status=20
         )

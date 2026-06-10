@@ -1,10 +1,7 @@
-import json
-from datetime import datetime
-
 from loguru import logger
 
 from dao import SupplierDao, NoticeDao, MatchDao
-from models import MatchNoticeScore, MatchDto, NoticeDto
+from models import MatchedNotice, MatchDto, NoticeDto
 from providers import LLMEmbedding, LLMParser
 from concurrent.futures.thread import ThreadPoolExecutor
 
@@ -29,31 +26,17 @@ class SupplierService:
 
     ## 评估要求
     对每条公告从以下维度进行评估：
-    1. score（0-100）：综合匹配分数，100=完美匹配
-    2. level：高(>=80) / 中(50-79) / 低(<50)
-    3. reasons：为什么匹配或不匹配的简要说明（100字以内）
-    4. risk_tips：投标风险提示（80字以内）
-    5. matching_points：2-3个关键匹配点
-    6. mismatch_points：1-2个不匹配点（如有）
-    7. recommendation：是否建议投标及策略建议（60字以内）
+    1. match_score（0-100）：综合匹配分数（整数类型），100=完美匹配，
+    2. advice：给供应商的建议。包含：是否建议投标（匹配分数>=60分），如果可以投标，请说明理由，以及投标的话更进一步的注意事项和建议；如果不建议投标，说明理由。注意，这个建议是直接展示给供应商看的，所以请你按跟供应商面对面沟通的场景组织语言。
 
     请严格按以下 JSON 格式返回，只返回 JSON 对象，不要包含任何其他文字：
-
-    {{
-      "results": [
+    [
         {{
-          "notice_id": 公告ID,
-          "score": 85.5,
-          "level": "高",
-          "reasons": "...",
-          "risk_tips": "...",
-          "matching_points": "...",
-          "mismatch_points": "...",
-          "recommendation": "..."
+            "notice_id": 公告ID,
+            "match_score": 85, 
+            "advice": "...",
         }}
-      ],
-      "top3_notice_ids": [最高分公告ID, 次高, 第三]
-    }}
+    ]
     """
 
     @classmethod
@@ -104,8 +87,8 @@ class SupplierService:
         scored = list(zip(scores, notices))
         scored.sort(key=lambda x: x[0], reverse=True)
 
-        filtered_notices = [MatchNoticeScore(score=score, notice_id=notice.id) for score, notice in scored[:top_k]]
-        match_id = MatchDao.create(MatchDto(supplier_id=supplier_id, filtered_notices=filtered_notices, status=20))
+        matched_notices = [MatchedNotice(filter_score=score, notice_id=notice.id) for score, notice in scored[:top_k]]
+        match_id = MatchDao.create(MatchDto(supplier_id=supplier_id, matched_notices=matched_notices, status=20))
         logger.info(f"[filtered_notices] 供应商 {supplier_id} 完成粗筛，结果ID: {match_id}")
 
     # -----------------------------------------------------------------------
@@ -119,7 +102,7 @@ class SupplierService:
             top_n: 提交给 LLM 评估的候选公告数量（控制 token 消耗）
         """
         match = MatchDao.get(match_id)
-        if not match or not match.filtered_notices:
+        if not match or not match.matched_notices:
             logger.warning(f"[ai_match] Match {match_id} 不存在或无可选公告")
             return False
 
@@ -130,7 +113,8 @@ class SupplierService:
 
         # 获取候选公告详情（取 top_n 条）
         notices: list[NoticeDto] = []
-        for item in match.filtered_notices[:top_n]:
+        match.matched_notices = match.matched_notices[:top_n]
+        for item in match.matched_notices:
             notice = NoticeDao.get(item.notice_id)
             if notice:
                 notices.append(notice)
@@ -147,40 +131,23 @@ class SupplierService:
             logger.error(f"[ai_match] LLM 调用失败: {e}")
             return False
 
-        if not result or "results" not in result:
+        if not result or not isinstance(result, list):
             logger.error(f"[ai_match] LLM 返回结果异常: {result}")
             return False
 
-        # 解析并排序
-        ai_results = result.get("results", [])
-        ai_results.sort(key=lambda x: x.get("score", 0), reverse=True)
-
-        if not ai_results:
-            logger.warning(f"[ai_match] LLM 未返回有效评估结果")
-            return False
-
-        # 取最佳匹配结果更新 Match 记录
-        top = ai_results[0]
-        match.ai_match_score = round(top.get("score", 0))
-        match.ai_match_level = top.get("level", "")
-        match.ai_match_reasons = top.get("reasons", "")
-        match.ai_risk_tips = top.get("risk_tips", "")
-        match.ai_key_matching_points = top.get("matching_points", "")
-        match.ai_mismatch_points = top.get("mismatch_points", "")
-        match.ai_recommendation = top.get("recommendation", "")
-        match.ai_raw_response = json.dumps(result, ensure_ascii=False)
-        match.ai_call_time = datetime.now()
-        match.notice_id = top.get("notice_id", 0)
-        match.final_score = match.ai_match_score
-        match.is_top3 = 1 if match.final_score >= 80 else 0
+        # 把AI匹配结果和过滤结果结合
+        for notice in match.matched_notices:
+            for temp in result:
+                if notice.notice_id == temp['notice_id']:
+                    notice.match_score = temp['match_score']
+                    notice.advice = temp['advice']
+        match.matched_notices.sort(key=lambda x: x.match_score, reverse=True)
         match.status = 30
 
         success = MatchDao.update(match)
         if success:
-            logger.info(
-                f"[ai_match] 供应商 {match.supplier_id} Match {match_id} "
-                f"精筛完成，最佳匹配分数: {match.final_score}"
-            )
+            logger.info(f"[ai_match] 供应商 {match.supplier_id} Match {match_id} "
+                        f"精筛完成，最佳匹配分数: {match.matched_notices[0].match_score}")
         else:
             logger.error(f"[ai_match] Match {match_id} 更新数据库失败")
         return success

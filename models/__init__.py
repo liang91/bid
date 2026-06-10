@@ -39,7 +39,7 @@ from models.notice_attachment import NoticeAttachment, NoticeAttachmentDto
 from models.notice_package import NoticePackage, NoticePackageDto
 from models.supplier import Supplier, SupplierDto, SupplierQualification
 from models.supplier_service_region import SupplierServiceRegion, SupplierServiceRegionDto
-from models.match import MatchNoticeScore, Match, MatchDto
+from models.match import MatchedNotice, Match, MatchDto
 from models.job_log import JobLog, JobLogDto
 from models.site import Site, SiteDto
 from models.user import User, UserDto

@@ -31,7 +31,7 @@ class LLMParser:
     model = config.get("llm.model")
 
     @classmethod
-    def parse(cls, prompt: str) -> dict | bool:
+    def parse(cls, prompt: str) -> dict | bool| list:
         """调用 LLM 解析文本，返回 JSON dict.
 
         Args:
